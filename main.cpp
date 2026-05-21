@@ -7,6 +7,7 @@ int main() {
 
     CpuMonitor cpuMon;
     AppConfig config;
+    ProcessMonitor procMon;
 
     cpuMon.GetCpuUsage();
     Sleep(100);
@@ -45,14 +46,14 @@ int main() {
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 if (config.pageOffset + 15 < (int)totalProcesses) {
                     config.pageOffset += 15;
-                    ConsoleUI::RenderMonitor(config, cpuMon);
+                    ConsoleUI::RenderMonitor(config, cpuMon, procMon);
                 }
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
                 if (config.pageOffset - 15 >= 0) {
                     config.pageOffset -= 15;
-                    ConsoleUI::RenderMonitor(config, cpuMon);
+                    ConsoleUI::RenderMonitor(config, cpuMon, procMon);
                 }
                 Sleep(150);
             }
@@ -65,7 +66,7 @@ int main() {
             continue;
         }
 
-        ConsoleUI::RenderMonitor(config, cpuMon);
+        ConsoleUI::RenderMonitor(config, cpuMon, procMon);
 
         // [F9] або [K] - Завершити процес за PID
         if ((GetAsyncKeyState(VK_F9) & 0x8000) || (GetAsyncKeyState('K') & 0x8000)) {
