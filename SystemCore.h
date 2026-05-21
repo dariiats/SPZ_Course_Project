@@ -19,6 +19,8 @@ struct ProcessInfo {
     wchar_t state;           // S (R/S/Z/T)
     ULONGLONG ioReadBytes;
     ULONGLONG ioWriteBytes;
+    ULONGLONG ioDiskRead;    // Disk read rate (bytes)
+    ULONGLONG ioDiskWrite;   // Disk write rate (bytes)
 };
 
 class CpuMonitor {
