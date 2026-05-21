@@ -104,7 +104,7 @@ void ConsoleUI::RenderHelp(Language lang) {
     for (int i = 0; i < 20; i++) std::wcout << std::setw(w) << L" " << std::endl;
 }
 
-void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
+void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMonitor& procMon) {
     ResetCursor();
     int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
     std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
@@ -142,6 +142,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     double usedPageG = (memInfo.ullTotalPageFile - memInfo.ullAvailPageFile) / (1024.0 * 1024.0 * 1024.0);
 
     std::vector<ProcessInfo> processes = SystemManager::GetProcesses();
+    procMon.UpdateRates(processes);
 
     ULONGLONG uptimeMs = GetTickCount64();
     int days = uptimeMs / (1000 * 60 * 60 * 24);
@@ -285,29 +286,27 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             std::wcout << std::right << std::setw(9) << formatTime(proc.cpuTime) << L" ";
         } else {
             // I/O tab
-            auto formatIO = [](ULONGLONG bytes) -> std::wstring {
+            auto formatRate = [](double bytesPerSec) -> std::wstring {
                 wchar_t buf[16];
-                if (bytes >= 1024ULL * 1024 * 1024) swprintf(buf, 16, L"%.1fG", bytes / (1024.0 * 1024.0 * 1024.0));
-                else if (bytes >= 1024ULL * 1024) swprintf(buf, 16, L"%.1fM", bytes / (1024.0 * 1024.0));
-                else if (bytes >= 1024ULL) swprintf(buf, 16, L"%.2fK", bytes / 1024.0);
-                else swprintf(buf, 16, L"%.2fB", (double)bytes);
+                if (bytesPerSec >= 1024.0 * 1024.0 * 1024.0) swprintf(buf, 16, L"%.1f G/s", bytesPerSec / (1024.0 * 1024.0 * 1024.0));
+                else if (bytesPerSec >= 1024.0 * 1024.0) swprintf(buf, 16, L"%.1f M/s", bytesPerSec / (1024.0 * 1024.0));
+                else if (bytesPerSec >= 1024.0) swprintf(buf, 16, L"%.2f K/s", bytesPerSec / 1024.0);
+                else if (bytesPerSec > 0.01) swprintf(buf, 16, L"%.2f B/s", bytesPerSec);
+                else swprintf(buf, 16, L"0.00 B/s");
                 return buf;
             };
 
-            // IO priority (B4 = background)
+            // IO priority
             std::wcout << std::left << std::setw(3) << L"B4" << L" ";
-            // DISK R/W (combined rate)
+            // DISK R/W (combined)
             if (printedCount != 0) SetColor(WHITE);
-            std::wstring rw = formatIO(proc.ioDiskRead) + L"/s";
-            std::wcout << std::right << std::setw(8) << rw << L" ";
+            std::wcout << std::right << std::setw(8) << formatRate(proc.ioReadRate + proc.ioWriteRate) << L" ";
             // DISK READ
             if (printedCount != 0) SetColor(FG_BRIGHT_GREEN);
-            std::wstring dr = formatIO(proc.ioReadBytes) + L"/s";
-            std::wcout << std::right << std::setw(10) << dr << L" ";
+            std::wcout << std::right << std::setw(10) << formatRate(proc.ioReadRate) << L" ";
             // DISK WRITE
             if (printedCount != 0) SetColor(FG_BRIGHT_RED);
-            std::wstring dw = formatIO(proc.ioWriteBytes) + L"/s";
-            std::wcout << std::right << std::setw(11) << dw << L" ";
+            std::wcout << std::right << std::setw(11) << formatRate(proc.ioWriteRate) << L" ";
             // SWPD%
             if (printedCount != 0) SetColor(WHITE);
             std::wcout << std::right << std::setw(5) << L"N/A" << L" ";

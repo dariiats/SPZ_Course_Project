@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 struct ProcessInfo {
     DWORD pid;
@@ -13,14 +14,30 @@ struct ProcessInfo {
     SIZE_T sharedMemory;     // SHR
     int priority;            // PRI
     int niceness;            // NI
-    double cpuPercent;       // CPU%
+    double cpuPercent;       // CPU% (реальний, за інтервал)
     double memPercent;       // MEM%
     ULONGLONG cpuTime;       // TIME+ (in milliseconds)
     wchar_t state;           // S (R/S/Z/T)
-    ULONGLONG ioReadBytes;
-    ULONGLONG ioWriteBytes;
-    ULONGLONG ioDiskRead;    // Disk read rate (bytes)
-    ULONGLONG ioDiskWrite;   // Disk write rate (bytes)
+    ULONGLONG ioReadBytes;   // Cumulative read
+    ULONGLONG ioWriteBytes;  // Cumulative write
+    double ioReadRate;       // Bytes/s read (rate)
+    double ioWriteRate;      // Bytes/s write (rate)
+};
+
+// Зберігає попередній стан процесу для обчислення rate
+struct PrevProcessState {
+    ULONGLONG cpuKernel;
+    ULONGLONG cpuUser;
+    ULONGLONG ioRead;
+    ULONGLONG ioWrite;
+    ULONGLONG timestamp; // GetTickCount64
+};
+
+class ProcessMonitor {
+private:
+    std::unordered_map<DWORD, PrevProcessState> prevStates;
+public:
+    void UpdateRates(std::vector<ProcessInfo>& processes);
 };
 
 class CpuMonitor {
@@ -37,7 +54,7 @@ public:
 
 class SystemManager {
 public:
-    static bool EnableDebugPrivilege(); // Увімкнення прав для перегляду Chrome/системних процесів
+    static bool EnableDebugPrivilege();
     static std::vector<ProcessInfo> GetProcesses();
     static DWORD KillProcess(DWORD pid);
 };

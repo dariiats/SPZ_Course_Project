@@ -112,8 +112,8 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
             info.userName = L"-";
             info.ioReadBytes = 0;
             info.ioWriteBytes = 0;
-            info.ioDiskRead = 0;
-            info.ioDiskWrite = 0;
+            info.ioReadRate = 0.0;
+            info.ioWriteRate = 0.0;
 
             HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
             if (hProcess != NULL) {
@@ -163,8 +163,6 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                 if (GetProcessIoCounters(hProcess, &ioCounters)) {
                     info.ioReadBytes = ioCounters.ReadTransferCount;
                     info.ioWriteBytes = ioCounters.WriteTransferCount;
-                    info.ioDiskRead = ioCounters.ReadTransferCount;
-                    info.ioDiskWrite = ioCounters.WriteTransferCount;
                 }
 
                 CloseHandle(hProcess);
@@ -183,4 +181,64 @@ DWORD SystemManager::KillProcess(DWORD pid) {
     if (!TerminateProcess(hProcess, 0)) result = GetLastError();
     CloseHandle(hProcess);
     return result;
+}
+
+void ProcessMonitor::UpdateRates(std::vector<ProcessInfo>& processes) {
+    ULONGLONG now = GetTickCount64();
+    int numCpus = 1;
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    numCpus = (int)si.dwNumberOfProcessors;
+
+    for (auto& proc : processes) {
+        // Отримуємо поточний CPU time для цього процесу
+        ULONGLONG curKernel = 0, curUser = 0;
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, proc.pid);
+        if (hProc) {
+            FILETIME createTime, exitTime, kernelTime, userTime;
+            if (GetProcessTimes(hProc, &createTime, &exitTime, &kernelTime, &userTime)) {
+                curKernel = (static_cast<ULONGLONG>(kernelTime.dwHighDateTime) << 32) | kernelTime.dwLowDateTime;
+                curUser = (static_cast<ULONGLONG>(userTime.dwHighDateTime) << 32) | userTime.dwLowDateTime;
+            }
+            CloseHandle(hProc);
+        }
+
+        auto it = prevStates.find(proc.pid);
+        if (it != prevStates.end()) {
+            PrevProcessState& prev = it->second;
+            ULONGLONG elapsed = now - prev.timestamp;
+            if (elapsed > 0) {
+                double elapsedSec = elapsed / 1000.0;
+
+                // CPU% = (delta CPU time / elapsed / numCPUs) * 100
+                ULONGLONG deltaCpu = (curKernel + curUser) - (prev.cpuKernel + prev.cpuUser);
+                // deltaCpu is in 100ns units, elapsed is in ms
+                double cpuSec = deltaCpu / 10000000.0; // to seconds
+                proc.cpuPercent = (cpuSec / elapsedSec) / numCpus * 100.0;
+                if (proc.cpuPercent < 0) proc.cpuPercent = 0;
+                if (proc.cpuPercent > 100) proc.cpuPercent = 100;
+
+                // I/O rate
+                ULONGLONG deltaRead = proc.ioReadBytes - prev.ioRead;
+                ULONGLONG deltaWrite = proc.ioWriteBytes - prev.ioWrite;
+                proc.ioReadRate = deltaRead / elapsedSec;
+                proc.ioWriteRate = deltaWrite / elapsedSec;
+            }
+        } else {
+            proc.cpuPercent = 0.0;
+            proc.ioReadRate = 0.0;
+            proc.ioWriteRate = 0.0;
+        }
+
+        // Зберігаємо поточний стан
+        prevStates[proc.pid] = { curKernel, curUser, proc.ioReadBytes, proc.ioWriteBytes, now };
+    }
+
+    // Видаляємо процеси які зникли
+    std::unordered_map<DWORD, PrevProcessState> newStates;
+    for (auto& proc : processes) {
+        auto it = prevStates.find(proc.pid);
+        if (it != prevStates.end()) newStates[proc.pid] = it->second;
+    }
+    prevStates = newStates;
 }
