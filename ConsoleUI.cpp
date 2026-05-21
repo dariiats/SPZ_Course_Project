@@ -315,13 +315,16 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
             if (printedCount != 0) SetColor(WHITE);
         }
 
-        std::wcout << std::left << std::setw(cmdColW) << name << std::endl;
+        std::wcout << std::left << std::setw(cmdColW) << name;
+        std::wcout << std::endl;
         if (printedCount == 0) SetColor(WHITE);
         printedCount++;
     }
 
     SetColor(WHITE);
-    while (printedCount < 15) { std::wcout << std::setw(termWidth) << L" " << std::endl; printedCount++; }
+    // Завжди рівно 15 рядків — заповнюємо порожні
+    std::wstring emptyLine(termWidth, L' ');
+    while (printedCount < 15) { std::wcout << emptyLine << std::endl; printedCount++; }
 
     SetColor(DARKGRAY);
     std::wcout << separator << std::endl;
@@ -336,7 +339,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
     SetColor(WHITE);
-    // Заливаємо залишок рядка пробілами
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
 }
 
