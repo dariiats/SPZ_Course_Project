@@ -31,6 +31,13 @@ int main() {
             else config.refreshInterval = 1000;
             Sleep(250);
         }
+        // [Tab] - Перемикання вкладок Main/IO
+        if (GetAsyncKeyState(VK_TAB) & 0x8000) {
+            config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
+            config.pageOffset = 0;
+            system("cls");
+            Sleep(250);
+        }
 
         // Гортання сторінок стрілками
         if (!config.showHelp) {

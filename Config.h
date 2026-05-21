@@ -7,11 +7,17 @@ enum class Language {
     English
 };
 
+enum class TabView {
+    Main,
+    IO
+};
+
 struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
     bool showHelp = false;
-    int pageOffset = 0; // Зміщення для гортання процесів
+    int pageOffset = 0;
+    TabView activeTab = TabView::Main;
 };
 
 class LocalizationManager {
