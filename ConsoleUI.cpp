@@ -154,14 +154,17 @@ static std::wstring LeftAlign(const std::wstring& s, int width) {
 void ConsoleUI::InitConsole() {
     std::setlocale(LC_ALL, "");
     SetCursorVisibility(false);
-    // Встановлюємо розмір буфера консолі = розміру вікна (без скролу)
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(hConsole, &csbi);
-    int w = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    int h = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-    COORD bufSize = { (SHORT)w, (SHORT)h };
-    SetConsoleScreenBufferSize(hConsole, bufSize);
+    // Вимикаємо буферизацію wcout
+    std::wcout.sync_with_stdio(false);
+    setvbuf(stdout, NULL, _IONBF, 0);
+}
+
+// Записує рядок фіксованої ширини в консоль (перезаписує без мерехтіння)
+static void WriteFixedLine(const std::wstring& text, int width) {
+    std::wstring line = text;
+    if ((int)line.length() < width) line.append(width - line.length(), L' ');
+    else if ((int)line.length() > width) line = line.substr(0, width);
+    std::wcout << line;
 }
 
 void ConsoleUI::ResetCursor() {
@@ -249,9 +252,9 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMonitor& procMon) {
-    // === Крок 1: збираємо ВСІ дані до малювання ===
-    EnsureFrame();
-    int termWidth = g_frame.GetWidth();
+    system("cls");
+    int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
+    std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
 
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
@@ -276,6 +279,53 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     int hours = (int)((uptimeMs / (1000ULL * 60 * 60)) % 24);
     int mins = (int)((uptimeMs / (1000ULL * 60)) % 60);
     int secs = (int)((uptimeMs / 1000ULL) % 60);
+
+    std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
+        if (config.activeTab == TabView::IO)
+            return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
+        return a.memoryUsage > b.memoryUsage;
+    });
+
+    if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
+
+    // === ТЕПЕР малюємо (курсор на початок, швидкий вивід) ===
+    ResetCursor();
+
+    // ВЕРХНЯ ПАНЕЛЬ: СІТКА ЯДЕР
+    for (int r = 0; r < numRows; ++r) {
+        for (int c = 0; c < numCols; ++c) {
+            int coreIdx = c * numRows + r;
+            if (coreIdx < numCores) {
+                double simulatedCoreLoad = overallCpu + (coreIdx % 3) * 2.5 - (coreIdx % 2) * 1.5;
+                if (simulatedCoreLoad < 0) simulatedCoreLoad = 0;
+                if (simulatedCoreLoad > 100) simulatedCoreLoad = 100;
+                DrawCoreBar(coreIdx, simulatedCoreLoad);
+            }
+            else {
+                std::wcout << std::setw(28) << L" ";
+            }
+        }
+        std::wcout << std::endl;
+    }
+
+    // РЯДКИ СТАТИСТИКИ
+    DrawWideBar(L"Mem", usedMemG, totalMemG, L"G", FG_BRIGHT_GREEN);
+    SetColor(FG_BRIGHT_CYAN); std::wcout << L"  Tasks: "; SetColor(WHITE);
+    std::wcout << processes.size() << L", 128 thr; 1 running" << std::endl;
+
+    DrawWideBar(L"Swp", usedPageG, totalPageG, L"G", FG_BRIGHT_RED);
+    SetColor(FG_BRIGHT_CYAN); std::wcout << L"  Load avg: "; SetColor(WHITE);
+    std::wcout << std::fixed << std::setprecision(2) << (overallCpu / 100.0) + 0.15 << L" "
+        << (overallCpu / 100.0) + 0.08 << L" " << (overallCpu / 100.0) + 0.02 << std::endl;
+
+    SetColor(FG_BRIGHT_CYAN); std::wcout << std::setw(51) << L" " << L"  Uptime: "; SetColor(WHITE);
+    if (days > 0) std::wcout << days << L" days, ";
+    std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
+        << std::setw(2) << mins << L":" << std::setw(2) << secs << std::setfill(L' ') << std::endl;
+
+    // === ВКЛАДКИ ===
+    SetColor(DARKGRAY);
+    std::wcout << separator << std::endl;
 
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
         if (config.activeTab == TabView::IO)
@@ -393,37 +443,9 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
         g_frame.Print(LeftAlign(L"IOD%", 6));
         g_frame.Print(LeftAlign(L"Command", cmdColW));
     }
-    g_frame.PadToEnd();
-    g_frame.NewLine();
+    SetColor(WHITE);
 
-    // === Рядки процесів ===
-    auto formatMem = [](SIZE_T bytes) -> std::wstring {
-        double kb = bytes / 1024.0;
-        wchar_t buf[16];
-        if (kb >= 1024.0) swprintf(buf, 16, L"%.0fM", kb / 1024.0);
-        else swprintf(buf, 16, L"%.0fK", kb);
-        return buf;
-    };
-
-    auto formatTime = [](ULONGLONG ms) -> std::wstring {
-        int totalSec = (int)(ms / 1000);
-        int h = totalSec / 3600, m = (totalSec % 3600) / 60, s = totalSec % 60;
-        int cs = (int)((ms % 1000) / 10);
-        wchar_t buf[20];
-        if (h > 0) swprintf(buf, 20, L"%d:%02d:%02d", h, m, s);
-        else swprintf(buf, 20, L"%d:%02d.%02d", m, s, cs);
-        return buf;
-    };
-
-    auto formatRate = [](double bytesPerSec) -> std::wstring {
-        wchar_t buf[16];
-        if (bytesPerSec >= 1024.0 * 1024.0 * 1024.0) swprintf(buf, 16, L"%.1fG/s", bytesPerSec / (1024.0 * 1024.0 * 1024.0));
-        else if (bytesPerSec >= 1024.0 * 1024.0) swprintf(buf, 16, L"%.1fM/s", bytesPerSec / (1024.0 * 1024.0));
-        else if (bytesPerSec >= 1024.0) swprintf(buf, 16, L"%.2fK/s", bytesPerSec / 1024.0);
-        else if (bytesPerSec > 0.01) swprintf(buf, 16, L"%.0fB/s", bytesPerSec);
-        else swprintf(buf, 16, L"0B/s");
-        return buf;
-    };
+    if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
 
     int printedCount = 0;
     int endIdx = (std::min)(config.pageOffset + 15, (int)processes.size());
@@ -504,46 +526,47 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
             g_frame.PrintChar(L' ');
         }
 
-        g_frame.SetColor(baseColor);
-        g_frame.Print(LeftAlign(name, cmdColW));
-        g_frame.PadToEnd();
-        g_frame.NewLine();
+        std::wcout << std::left << std::setw(cmdColW) << name;
+
+        // Заповнити залишок рядка пробілами
+        HANDLE hLine = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO lbi;
+        GetConsoleScreenBufferInfo(hLine, &lbi);
+        int pad = lbi.dwSize.X - lbi.dwCursorPosition.X;
+        if (pad > 0) { DWORD wr; FillConsoleOutputCharacterW(hLine, L' ', pad, lbi.dwCursorPosition, &wr); FillConsoleOutputAttribute(hLine, WHITE, pad, lbi.dwCursorPosition, &wr); }
+        std::wcout << std::endl;
+        if (printedCount == 0) SetColor(WHITE);
         printedCount++;
     }
 
-    // Заповнюємо до 15 рядків
-    g_frame.SetColor(WHITE);
-    while (printedCount < 15) {
-        g_frame.NewLine();
-        printedCount++;
-    }
+    SetColor(WHITE);
+    // Завжди рівно 15 рядків — заповнюємо порожні
+    std::wstring emptyLine(termWidth, L' ');
+    while (printedCount < 15) { std::wcout << emptyLine << std::endl; printedCount++; }
 
-    // Розділювач
-    g_frame.SetColor(DARKGRAY);
-    g_frame.Print(std::wstring(termWidth, L'-'));
-    g_frame.NewLine();
+    SetColor(DARKGRAY);
+    std::wcout << separator << std::endl;
 
-    // НИЖНЯ ПАНЕЛЬ: F-клавіші
-    auto fkey = [&](const wchar_t* key, const wchar_t* label) {
-        g_frame.SetColor((DARKGRAY << 4) | WHITE);
-        g_frame.Print(key);
-        g_frame.SetColor((CYAN << 4) | BLACK);
-        g_frame.Print(label);
-    };
+    // НИЖНЯ ПАНЕЛЬ: F-КЛАВІШІ
+    SetColor(BLACK);
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F1 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F2 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" Tab"; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F6 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F9 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
-    bool ua = (config.lang == Language::Ukrainian);
-    fkey(L" F1 ", ua ? L"Довідка " : L"Help    ");
-    fkey(L" F2 ", ua ? L"Мова    " : L"Lang    ");
-    fkey(L" Tab", ua ? L"Вкладка " : L"Tab     ");
-    fkey(L" F6 ", ua ? L"Інтервал" : L"Interval");
-    fkey(L" F9 ", ua ? L"Заверш  " : L"Kill    ");
-    fkey(L" <->", ua ? L"Гортання" : L"Scroll  ");
+    SetColor(WHITE);
+    std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
 
-    g_frame.SetColor(WHITE);
-    g_frame.PadToEnd();
-
-    // === Крок 3: один атомарний вивід ===
-    g_frame.Flush(GetStdHandle(STD_OUTPUT_HANDLE));
+    // Очищення залишку екрану під footer
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hOut, &csbi);
+    DWORD cellsToFill = (csbi.dwSize.X) * (csbi.dwSize.Y - csbi.dwCursorPosition.Y);
+    DWORD written;
+    FillConsoleOutputCharacterW(hOut, L' ', cellsToFill, csbi.dwCursorPosition, &written);
+    FillConsoleOutputAttribute(hOut, WHITE, cellsToFill, csbi.dwCursorPosition, &written);
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
