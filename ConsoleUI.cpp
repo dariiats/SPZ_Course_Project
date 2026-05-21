@@ -105,7 +105,7 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMonitor& procMon) {
-    ResetCursor();
+    system("cls");
     int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
     std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
 
@@ -316,6 +316,13 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
         }
 
         std::wcout << std::left << std::setw(cmdColW) << name;
+
+        // Заповнити залишок рядка пробілами
+        HANDLE hLine = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO lbi;
+        GetConsoleScreenBufferInfo(hLine, &lbi);
+        int pad = lbi.dwSize.X - lbi.dwCursorPosition.X;
+        if (pad > 0) { DWORD wr; FillConsoleOutputCharacterW(hLine, L' ', pad, lbi.dwCursorPosition, &wr); FillConsoleOutputAttribute(hLine, WHITE, pad, lbi.dwCursorPosition, &wr); }
         std::wcout << std::endl;
         if (printedCount == 0) SetColor(WHITE);
         printedCount++;
@@ -340,6 +347,15 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
 
     SetColor(WHITE);
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
+
+    // Очищення залишку екрану під footer
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hOut, &csbi);
+    DWORD cellsToFill = (csbi.dwSize.X) * (csbi.dwSize.Y - csbi.dwCursorPosition.Y);
+    DWORD written;
+    FillConsoleOutputCharacterW(hOut, L' ', cellsToFill, csbi.dwCursorPosition, &written);
+    FillConsoleOutputAttribute(hOut, WHITE, cellsToFill, csbi.dwCursorPosition, &written);
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
