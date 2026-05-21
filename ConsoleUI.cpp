@@ -329,7 +329,9 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     }
 
     SetColor(WHITE);
-    while (printedCount < 15) { std::wcout << std::setw(termWidth) << L" " << std::endl; printedCount++; }
+    // Завжди рівно 15 рядків — заповнюємо порожні
+    std::wstring emptyLine(termWidth, L' ');
+    while (printedCount < 15) { std::wcout << emptyLine << std::endl; printedCount++; }
 
     SetColor(DARKGRAY);
     std::wcout << separator << std::endl;
