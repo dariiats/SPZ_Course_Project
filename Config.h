@@ -7,20 +7,11 @@ enum class Language {
     English
 };
 
-enum class TabView {
-    Main,
-    IO
-};
-
 struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
     bool showHelp = false;
-    int scrollOffset = 0;    // Зміщення скролу (перший видимий рядок)
-    int pageOffset = 0;      // Deprecated alias, kept for compatibility
-    TabView activeTab = TabView::Main;
-    int selectedRow = 0;     // Глобальний індекс виділеного процесу
-    int visibleRows = 20;    // Кількість видимих рядків процесів
+    int pageOffset = 0; // Зміщення для гортання процесів
 };
 
 class LocalizationManager {

@@ -110,10 +110,6 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
             info.cpuTime = 0;
             info.state = L'S';
             info.userName = L"-";
-            info.ioReadBytes = 0;
-            info.ioWriteBytes = 0;
-            info.ioReadOps = 0;
-            info.ioWriteOps = 0;
 
             HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
             if (hProcess != NULL) {
@@ -157,15 +153,6 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
 
                 // User name
                 info.userName = GetProcessUserName(hProcess);
-
-                // I/O counters
-                IO_COUNTERS ioCounters;
-                if (GetProcessIoCounters(hProcess, &ioCounters)) {
-                    info.ioReadBytes = ioCounters.ReadTransferCount;
-                    info.ioWriteBytes = ioCounters.WriteTransferCount;
-                    info.ioReadOps = ioCounters.ReadOperationCount;
-                    info.ioWriteOps = ioCounters.WriteOperationCount;
-                }
 
                 CloseHandle(hProcess);
             }
