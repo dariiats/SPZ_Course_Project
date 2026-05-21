@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 struct ProcessInfo {
     DWORD pid;
@@ -37,7 +38,17 @@ public:
 
 class SystemManager {
 public:
-    static bool EnableDebugPrivilege(); // Увімкнення прав для перегляду Chrome/системних процесів
+    static bool EnableDebugPrivilege();
     static std::vector<ProcessInfo> GetProcesses();
     static DWORD KillProcess(DWORD pid);
+
+private:
+    // Зберігаємо попередні CPU-часи для обчислення per-process CPU%
+    struct PrevCpuData {
+        ULONGLONG kernelTime = 0;
+        ULONGLONG userTime = 0;
+        ULONGLONG timestamp = 0; // system time snapshot
+    };
+    static std::unordered_map<DWORD, PrevCpuData> prevCpuMap_;
+    static ULONGLONG prevSystemTime_;
 };
