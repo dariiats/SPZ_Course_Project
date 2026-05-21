@@ -34,6 +34,7 @@ struct AppConfig {
     bool showSortMenu = false;
     int sortMenuIndex = 5; // default = Res (index in menu list)
     int pageOffset = 0;
+    int selectedRow = 0; // виділений рядок у таблиці процесів
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
     bool sortAscending = false; // false = descending (default like htop)

@@ -289,6 +289,9 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     });
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
+    if (config.selectedRow >= (std::min)(15, (int)processes.size() - config.pageOffset))
+        config.selectedRow = (std::min)(15, (int)processes.size() - config.pageOffset) - 1;
+    if (config.selectedRow < 0) config.selectedRow = 0;
 
     int printedCount = 0;
     for (int i = config.pageOffset; i < (std::min)(config.pageOffset + 15, (int)processes.size()); ++i) {
@@ -318,26 +321,28 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wstring user = proc.userName;
         if (user.length() > 8) user = user.substr(0, 8);
 
-        if (printedCount == 0) { SetColor(BG_CYAN_FG_BLACK); }
+        bool isSelected = (printedCount == config.selectedRow);
+
+        if (isSelected) { SetColor(BG_CYAN_FG_BLACK); }
         else { SetColor(FG_BRIGHT_CYAN); }
 
         std::wcout << std::right << std::setw(6) << proc.pid << L" ";
-        if (printedCount != 0) SetColor(WHITE);
+        if (!isSelected) SetColor(WHITE);
         std::wcout << std::left << std::setw(9) << user;
 
         if (config.activeTab == TabView::Main) {
             std::wcout << std::right << std::setw(3) << proc.priority << L" ";
             std::wcout << std::right << std::setw(3) << proc.niceness << L" ";
             std::wcout << std::right << std::setw(6) << formatMem(proc.virtualMemory) << L" ";
-            if (printedCount != 0) SetColor(FG_BRIGHT_GREEN);
+            if (!isSelected) SetColor(FG_BRIGHT_GREEN);
             std::wcout << std::right << std::setw(6) << formatMem(proc.memoryUsage) << L" ";
-            if (printedCount != 0) SetColor(WHITE);
+            if (!isSelected) SetColor(WHITE);
             std::wcout << std::right << std::setw(6) << formatMem(proc.sharedMemory) << L" ";
             std::wcout << proc.state << L" ";
-            if (printedCount != 0 && proc.cpuPercent > 5.0) SetColor(FG_BRIGHT_RED);
-            else if (printedCount != 0) SetColor(FG_BRIGHT_GREEN);
+            if (!isSelected && proc.cpuPercent > 5.0) SetColor(FG_BRIGHT_RED);
+            else if (!isSelected) SetColor(FG_BRIGHT_GREEN);
             std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.cpuPercent;
-            if (printedCount != 0) SetColor(WHITE);
+            if (!isSelected) SetColor(WHITE);
             std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.memPercent << L" ";
             std::wcout << std::right << std::setw(9) << formatTime(proc.cpuTime) << L" ";
         } else {
@@ -354,27 +359,27 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             // IO priority (B4 = background)
             std::wcout << std::left << std::setw(3) << L"B4" << L" ";
             // DISK R/W (combined rate)
-            if (printedCount != 0) SetColor(WHITE);
+            if (!isSelected) SetColor(WHITE);
             std::wstring rw = formatIO(proc.ioDiskRead) + L"/s";
             std::wcout << std::right << std::setw(8) << rw << L" ";
             // DISK READ
-            if (printedCount != 0) SetColor(FG_BRIGHT_GREEN);
+            if (!isSelected) SetColor(FG_BRIGHT_GREEN);
             std::wstring dr = formatIO(proc.ioReadBytes) + L"/s";
             std::wcout << std::right << std::setw(10) << dr << L" ";
             // DISK WRITE
-            if (printedCount != 0) SetColor(FG_BRIGHT_RED);
+            if (!isSelected) SetColor(FG_BRIGHT_RED);
             std::wstring dw = formatIO(proc.ioWriteBytes) + L"/s";
             std::wcout << std::right << std::setw(11) << dw << L" ";
             // SWPD%
-            if (printedCount != 0) SetColor(WHITE);
+            if (!isSelected) SetColor(WHITE);
             std::wcout << std::right << std::setw(5) << L"N/A" << L" ";
             // IOD%
             std::wcout << std::right << std::setw(5) << L"N/A" << L" ";
-            if (printedCount != 0) SetColor(WHITE);
+            if (!isSelected) SetColor(WHITE);
         }
 
         std::wcout << std::left << std::setw(cmdColW) << name << std::endl;
-        if (printedCount == 0) SetColor(WHITE);
+        SetColor(WHITE);
         printedCount++;
     }
 

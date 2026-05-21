@@ -80,19 +80,43 @@ int main() {
             Sleep(250);
         }
 
-        // Гортання сторінок стрілками
+        // Гортання сторінок стрілками та виділення процесу
         if (!config.showHelp) {
             size_t totalProcesses = SystemManager::GetProcesses().size();
+            int pageSize = 15;
+            int maxOnPage = (std::min)(pageSize, (int)totalProcesses - config.pageOffset);
+
+            // Вгору/вниз — виділення рядка
+            if (GetAsyncKeyState(VK_UP) & 0x8000) {
+                if (config.selectedRow > 0) {
+                    config.selectedRow--;
+                } else if (config.pageOffset > 0) {
+                    config.pageOffset--;
+                }
+                Sleep(120);
+            }
+            if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
+                if (config.selectedRow < maxOnPage - 1) {
+                    config.selectedRow++;
+                } else if (config.pageOffset + pageSize < (int)totalProcesses) {
+                    config.pageOffset++;
+                }
+                Sleep(120);
+            }
+
+            // Вліво/вправо — гортання сторінками
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
-                if (config.pageOffset + 15 < (int)totalProcesses) {
-                    config.pageOffset += 15;
+                if (config.pageOffset + pageSize < (int)totalProcesses) {
+                    config.pageOffset += pageSize;
+                    config.selectedRow = 0;
                     ConsoleUI::RenderMonitor(config, cpuMon);
                 }
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
-                if (config.pageOffset - 15 >= 0) {
-                    config.pageOffset -= 15;
+                if (config.pageOffset - pageSize >= 0) {
+                    config.pageOffset -= pageSize;
+                    config.selectedRow = 0;
                     ConsoleUI::RenderMonitor(config, cpuMon);
                 }
                 Sleep(150);
