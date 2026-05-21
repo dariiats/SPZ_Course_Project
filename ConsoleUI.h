@@ -11,4 +11,8 @@ public:
     static void RenderMonitor(AppConfig& config, CpuMonitor& cpuMon);
     static void RenderHelp(Language lang);
     static void HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon);
+    static bool ProcessMouseInput(AppConfig& config, CpuMonitor& cpuMon);
+    static int GetTabRowY();       // Рядок де малюються вкладки
+    static int GetHeaderRowY();    // Рядок шапки таблиці
+    static int GetFooterRowY();    // Рядок нижньої панелі
 };
