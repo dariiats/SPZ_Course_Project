@@ -36,6 +36,7 @@ struct AppConfig {
     int pageOffset = 0;
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
+    bool sortAscending = false; // false = descending (default like htop)
 };
 
 class LocalizationManager {

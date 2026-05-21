@@ -216,7 +216,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                      mVirt = L"VIRT", mRes = L"RES", mShr = L"SHR", mState = L"S",
                      mCpu = L"CPU%", mMem = L"MEM%", mTime = L"TIME+",
                      mCmd = (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"COMMAND");
-        const wchar_t arrow = L'\x25BC';
+        const wchar_t arrow = config.sortAscending ? L'\x25B2' : L'\x25BC';
         switch (config.sortColumn) {
             case SortColumn::Pid:        mPid = std::wstring(L" PID") + arrow; break;
             case SortColumn::User:       mUser = std::wstring(L"USER") + arrow; break;
@@ -268,21 +268,24 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
         if (config.activeTab == TabView::IO)
             return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
+
+        bool result;
         switch (config.sortColumn) {
-            case SortColumn::Pid:        return a.pid > b.pid;
-            case SortColumn::User:       return a.userName < b.userName;
-            case SortColumn::Priority:   return a.priority < b.priority;
-            case SortColumn::Nice:       return a.niceness < b.niceness;
-            case SortColumn::Virt:       return a.virtualMemory > b.virtualMemory;
-            case SortColumn::Res:        return a.memoryUsage > b.memoryUsage;
-            case SortColumn::Shr:        return a.sharedMemory > b.sharedMemory;
-            case SortColumn::State:      return a.state < b.state;
-            case SortColumn::CpuPercent: return a.cpuPercent > b.cpuPercent;
-            case SortColumn::MemPercent: return a.memPercent > b.memPercent;
-            case SortColumn::Time:       return a.cpuTime > b.cpuTime;
-            case SortColumn::Command:    return a.name < b.name;
-            default:                     return a.memoryUsage > b.memoryUsage;
+            case SortColumn::Pid:        result = a.pid > b.pid; break;
+            case SortColumn::User:       result = a.userName < b.userName; break;
+            case SortColumn::Priority:   result = a.priority < b.priority; break;
+            case SortColumn::Nice:       result = a.niceness < b.niceness; break;
+            case SortColumn::Virt:       result = a.virtualMemory > b.virtualMemory; break;
+            case SortColumn::Res:        result = a.memoryUsage > b.memoryUsage; break;
+            case SortColumn::Shr:        result = a.sharedMemory > b.sharedMemory; break;
+            case SortColumn::State:      result = a.state < b.state; break;
+            case SortColumn::CpuPercent: result = a.cpuPercent > b.cpuPercent; break;
+            case SortColumn::MemPercent: result = a.memPercent > b.memPercent; break;
+            case SortColumn::Time:       result = a.cpuTime > b.cpuTime; break;
+            case SortColumn::Command:    result = a.name < b.name; break;
+            default:                     result = a.memoryUsage > b.memoryUsage; break;
         }
+        return config.sortAscending ? !result : result;
     });
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
@@ -386,10 +389,10 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F1 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F2 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F3 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F4 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.sortAscending ? L"Asc " : L"Desc");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" Tab"; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F6 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F9 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
     SetColor(WHITE);
     // Заливаємо залишок рядка пробілами

@@ -73,6 +73,13 @@ int main() {
             continue;
         }
 
+        // [F4] або [R] - Інвертувати напрямок сортування
+        if ((GetAsyncKeyState(VK_F4) & 0x8000) || (GetAsyncKeyState('R') & 0x8000)) {
+            config.sortAscending = !config.sortAscending;
+            config.pageOffset = 0;
+            Sleep(250);
+        }
+
         // Гортання сторінок стрілками
         if (!config.showHelp) {
             size_t totalProcesses = SystemManager::GetProcesses().size();
