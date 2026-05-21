@@ -32,6 +32,17 @@ int GetConsoleWidth() {
 void ConsoleUI::InitConsole() {
     std::setlocale(LC_ALL, "");
     SetCursorVisibility(false);
+    // Вимикаємо буферизацію wcout
+    std::wcout.sync_with_stdio(false);
+    setvbuf(stdout, NULL, _IONBF, 0);
+}
+
+// Записує рядок фіксованої ширини в консоль (перезаписує без мерехтіння)
+static void WriteFixedLine(const std::wstring& text, int width) {
+    std::wstring line = text;
+    if ((int)line.length() < width) line.append(width - line.length(), L' ');
+    else if ((int)line.length() > width) line = line.substr(0, width);
+    std::wcout << line;
 }
 
 void ConsoleUI::ResetCursor() {
@@ -105,9 +116,9 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMonitor& procMon) {
-    ResetCursor();
-    int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
-    std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
+    // Збираємо дані ДО перемальовування
+    int termWidth = GetConsoleWidth();
+    std::wstring separator(termWidth, L'-');
 
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
@@ -116,6 +127,33 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
 
     int numCols = (numCores > 8) ? 4 : 2;
     int numRows = (numCores + numCols - 1) / numCols;
+
+    MEMORYSTATUSEX memInfo = { sizeof(MEMORYSTATUSEX) };
+    GlobalMemoryStatusEx(&memInfo);
+    double totalMemG = memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
+    double usedMemG = (memInfo.ullTotalPhys - memInfo.ullAvailPhys) / (1024.0 * 1024.0 * 1024.0);
+    double totalPageG = memInfo.ullTotalPageFile / (1024.0 * 1024.0 * 1024.0);
+    double usedPageG = (memInfo.ullTotalPageFile - memInfo.ullAvailPageFile) / (1024.0 * 1024.0 * 1024.0);
+
+    std::vector<ProcessInfo> processes = SystemManager::GetProcesses();
+    procMon.UpdateRates(processes);
+
+    ULONGLONG uptimeMs = GetTickCount64();
+    int days = (int)(uptimeMs / (1000ULL * 60 * 60 * 24));
+    int hours = (int)((uptimeMs / (1000ULL * 60 * 60)) % 24);
+    int mins = (int)((uptimeMs / (1000ULL * 60)) % 60);
+    int secs = (int)((uptimeMs / 1000ULL) % 60);
+
+    std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
+        if (config.activeTab == TabView::IO)
+            return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
+        return a.memoryUsage > b.memoryUsage;
+    });
+
+    if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
+
+    // === ТЕПЕР малюємо (курсор на початок, швидкий вивід) ===
+    ResetCursor();
 
     // ВЕРХНЯ ПАНЕЛЬ: СІТКА ЯДЕР
     for (int r = 0; r < numRows; ++r) {
@@ -133,22 +171,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
         }
         std::wcout << std::endl;
     }
-
-    MEMORYSTATUSEX memInfo = { sizeof(MEMORYSTATUSEX) };
-    GlobalMemoryStatusEx(&memInfo);
-    double totalMemG = memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
-    double usedMemG = (memInfo.ullTotalPhys - memInfo.ullAvailPhys) / (1024.0 * 1024.0 * 1024.0);
-    double totalPageG = memInfo.ullTotalPageFile / (1024.0 * 1024.0 * 1024.0);
-    double usedPageG = (memInfo.ullTotalPageFile - memInfo.ullAvailPageFile) / (1024.0 * 1024.0 * 1024.0);
-
-    std::vector<ProcessInfo> processes = SystemManager::GetProcesses();
-    procMon.UpdateRates(processes);
-
-    ULONGLONG uptimeMs = GetTickCount64();
-    int days = uptimeMs / (1000 * 60 * 60 * 24);
-    int hours = (uptimeMs / (1000 * 60 * 60)) % 24;
-    int mins = (uptimeMs / (1000 * 60)) % 60;
-    int secs = (uptimeMs / 1000) % 60;
 
     // РЯДКИ СТАТИСТИКИ
     DrawWideBar(L"Mem", usedMemG, totalMemG, L"G", FG_BRIGHT_GREEN);
@@ -225,12 +247,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
             << std::endl;
     }
     SetColor(WHITE);
-
-    std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
-        if (config.activeTab == TabView::IO)
-            return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
-        return a.memoryUsage > b.memoryUsage;
-    });
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
 
@@ -315,13 +331,16 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
             if (printedCount != 0) SetColor(WHITE);
         }
 
-        std::wcout << std::left << std::setw(cmdColW) << name << std::endl;
+        std::wcout << std::left << std::setw(cmdColW) << name;
+        std::wcout << std::endl;
         if (printedCount == 0) SetColor(WHITE);
         printedCount++;
     }
 
     SetColor(WHITE);
-    while (printedCount < 15) { std::wcout << std::setw(termWidth) << L" " << std::endl; printedCount++; }
+    // Завжди рівно 15 рядків — заповнюємо порожні
+    std::wstring emptyLine(termWidth, L' ');
+    while (printedCount < 15) { std::wcout << emptyLine << std::endl; printedCount++; }
 
     SetColor(DARKGRAY);
     std::wcout << separator << std::endl;
@@ -336,7 +355,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
     SetColor(WHITE);
-    // Заливаємо залишок рядка пробілами
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
 }
 
