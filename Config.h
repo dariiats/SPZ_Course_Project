@@ -1,5 +1,8 @@
 // Config.h
 #pragma once
+#ifndef CONFIG_H
+#define CONFIG_H
+
 #include <string>
 
 enum class Language {
@@ -16,11 +19,11 @@ struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
     bool showHelp = false;
-    int scrollOffset = 0;    // Зміщення скролу (перший видимий рядок)
-    int pageOffset = 0;      // Deprecated alias, kept for compatibility
+    int scrollOffset = 0;
+    int pageOffset = 0;
     TabView activeTab = TabView::Main;
-    int selectedRow = 0;     // Глобальний індекс виділеного процесу
-    int visibleRows = 20;    // Кількість видимих рядків процесів
+    int selectedRow = 0;
+    int visibleRows = 20;
 };
 
 class LocalizationManager {
@@ -49,3 +52,5 @@ public:
         return L"";
     }
 };
+
+#endif // CONFIG_H

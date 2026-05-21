@@ -128,7 +128,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
-    int numCores = sysInfo.dwNumberOfProcessors;
+    int numCores = (int)sysInfo.dwNumberOfProcessors;
     double overallCpu = cpuMon.GetCpuUsage();
 
     int numCols = (numCores > 8) ? 4 : 2;
@@ -171,10 +171,10 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::vector<ProcessInfo> processes = SystemManager::GetProcesses();
 
     ULONGLONG uptimeMs = GetTickCount64();
-    int days = uptimeMs / (1000 * 60 * 60 * 24);
-    int hours = (uptimeMs / (1000 * 60 * 60)) % 24;
-    int mins = (uptimeMs / (1000 * 60)) % 60;
-    int secs = (uptimeMs / 1000) % 60;
+    int days = (int)(uptimeMs / (1000ULL * 60 * 60 * 24));
+    int hours = (int)((uptimeMs / (1000ULL * 60 * 60)) % 24);
+    int mins = (int)((uptimeMs / (1000ULL * 60)) % 60);
+    int secs = (int)((uptimeMs / 1000ULL) % 60);
 
     // РЯДКИ СТАТИСТИКИ
     DrawWideBar(L"Mem", usedMemG, totalMemG, L"G", FG_BRIGHT_GREEN);
@@ -264,9 +264,11 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
     int consoleHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-    // Рядки зайняті: ядра + mem/swp/uptime(3) + separator(1) + tabs(1) + header(1) + separator(1) + footer(1) = overhead
-    SYSTEM_INFO si; GetSystemInfo(&si);
-    int coreRows = ((int)si.dwNumberOfProcessors + (si.dwNumberOfProcessors > 8 ? 3 : 1)) / (si.dwNumberOfProcessors > 8 ? 4 : 2);
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    int numProcs = (int)si.dwNumberOfProcessors;
+    int coreColsCalc = (numProcs > 8) ? 4 : 2;
+    int coreRows = (numProcs + coreColsCalc - 1) / coreColsCalc;
     int overhead = coreRows + 3 + 1 + 1 + 1 + 1 + 1; // cores + stats + sep + tab + header + sep + footer
     config.visibleRows = consoleHeight - overhead - 1;
     if (config.visibleRows < 5) config.visibleRows = 5;
@@ -331,7 +333,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     if (cmdColW < 15) cmdColW = 15;
 
     int printedCount = 0;
-    int endIdx = (std::min)(config.scrollOffset + config.visibleRows, totalProc);
+    int endIdx = (config.scrollOffset + config.visibleRows < totalProc) ? (config.scrollOffset + config.visibleRows) : totalProc;
     for (int i = config.scrollOffset; i < endIdx; ++i) {
         const auto& proc = processes[i];
 
@@ -432,11 +434,10 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 int ConsoleUI::GetTabRowY() {
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
-    int numCores = sysInfo.dwNumberOfProcessors;
+    int numCores = (int)sysInfo.dwNumberOfProcessors;
     int numCols = (numCores > 8) ? 4 : 2;
     int numRows = (numCores + numCols - 1) / numCols;
-    // core rows + Mem row + Swp row + Uptime row + separator row = numRows + 4
-    return numRows + 3 + 1; // +1 for separator
+    return numRows + 3 + 1;
 }
 
 int ConsoleUI::GetHeaderRowY() {
@@ -475,9 +476,9 @@ bool ConsoleUI::ProcessMouseInput(AppConfig& config, CpuMonitor& cpuMon) {
 
         // Клік лівою кнопкою
         if (mouse.dwEventFlags == 0 && (mouse.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED)) {
-            int tabRow = GetTabRowY();
-            int headerRow = GetHeaderRowY();
-            int footerRow = GetFooterRowY();
+            int tabRow = ConsoleUI::GetTabRowY();
+            int headerRow = ConsoleUI::GetHeaderRowY();
+            int footerRow = ConsoleUI::GetFooterRowY();
 
             // Клік на вкладки
             if (my == tabRow) {
