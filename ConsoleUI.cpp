@@ -73,8 +73,7 @@ void DrawCoreBar(int coreId, double percentage) {
     }
 
     SetColor(WHITE);
-    std::wcout << L" ";
-    std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << percentage << L"%";
+    std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(6) << percentage << L"%";
     std::wcout << L"]  ";
 }
 
@@ -140,6 +139,16 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             else {
                 std::wcout << std::setw(28) << L" ";
             }
+        }
+        // Очищення залишку рядка щоб не було артефактів при перемальовуванні
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbInfo;
+        GetConsoleScreenBufferInfo(hOut, &csbInfo);
+        DWORD written;
+        int remaining = csbInfo.dwSize.X - csbInfo.dwCursorPosition.X;
+        if (remaining > 0) {
+            FillConsoleOutputCharacterW(hOut, L' ', remaining, csbInfo.dwCursorPosition, &written);
+            FillConsoleOutputAttribute(hOut, WHITE, remaining, csbInfo.dwCursorPosition, &written);
         }
         std::wcout << std::endl;
     }
