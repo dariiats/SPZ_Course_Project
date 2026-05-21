@@ -7,6 +7,10 @@
 
 #pragma comment(lib, "advapi32.lib")
 
+// Статичні члени SystemManager
+std::unordered_map<DWORD, SystemManager::PrevCpuData> SystemManager::prevCpuMap_;
+ULONGLONG SystemManager::prevSystemTime_ = 0;
+
 static std::wstring GetProcessUserName(HANDLE hProcess) {
     HANDLE hToken = NULL;
     if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) return L"-";
@@ -94,6 +98,21 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
     GlobalMemoryStatusEx(&memStatus);
     double totalPhysMB = memStatus.ullTotalPhys / (1024.0 * 1024.0);
 
+    // Поточний системний час для обчислення дельти CPU
+    FILETIME sysIdleTime, sysKernelTime, sysUserTime;
+    GetSystemTimes(&sysIdleTime, &sysKernelTime, &sysUserTime);
+    ULONGLONG curSystemTime =
+        ((static_cast<ULONGLONG>(sysKernelTime.dwHighDateTime) << 32) | sysKernelTime.dwLowDateTime) +
+        ((static_cast<ULONGLONG>(sysUserTime.dwHighDateTime) << 32) | sysUserTime.dwLowDateTime);
+
+    ULONGLONG systemTimeDelta = curSystemTime - prevSystemTime_;
+
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    int numCores = si.dwNumberOfProcessors;
+
+    std::unordered_map<DWORD, PrevCpuData> newCpuMap;
+
     PROCESSENTRY32W pe = { sizeof(PROCESSENTRY32W) };
     if (Process32FirstW(hSnapshot, &pe)) {
         do {
@@ -120,16 +139,14 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                 // Memory info
                 PROCESS_MEMORY_COUNTERS_EX pmc = { sizeof(PROCESS_MEMORY_COUNTERS_EX) };
                 if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
-                    info.memoryUsage = pmc.WorkingSetSize;           // RES
-                    info.virtualMemory = pmc.PrivateUsage;           // VIRT (private bytes)
-                    // SHR approximation: WorkingSet - Private
+                    info.memoryUsage = pmc.WorkingSetSize;
+                    info.virtualMemory = pmc.PrivateUsage;
                     info.sharedMemory = (pmc.WorkingSetSize > pmc.PrivateUsage)
                         ? (pmc.WorkingSetSize - pmc.PrivateUsage) : 0;
                 }
 
                 // Priority
                 info.priority = GetPriorityClass(hProcess);
-                // Map priority class to numeric value like htop
                 switch (info.priority) {
                     case REALTIME_PRIORITY_CLASS: info.priority = -20; info.niceness = -20; break;
                     case HIGH_PRIORITY_CLASS: info.priority = -10; info.niceness = -10; break;
@@ -140,12 +157,27 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                     default: info.priority = 20; info.niceness = 0; break;
                 }
 
-                // CPU time
+                // CPU time + per-process CPU%
                 FILETIME createTime, exitTime, kernelTime, userTime;
                 if (GetProcessTimes(hProcess, &createTime, &exitTime, &kernelTime, &userTime)) {
                     ULONGLONG kt = (static_cast<ULONGLONG>(kernelTime.dwHighDateTime) << 32) | kernelTime.dwLowDateTime;
                     ULONGLONG ut = (static_cast<ULONGLONG>(userTime.dwHighDateTime) << 32) | userTime.dwLowDateTime;
-                    info.cpuTime = (kt + ut) / 10000; // Convert 100ns units to ms
+                    info.cpuTime = (kt + ut) / 10000; // 100ns -> ms
+
+                    // Обчислення CPU% через дельту
+                    if (prevSystemTime_ > 0 && systemTimeDelta > 0) {
+                        auto it = prevCpuMap_.find(pe.th32ProcessID);
+                        if (it != prevCpuMap_.end()) {
+                            ULONGLONG procDelta = (kt + ut) - (it->second.kernelTime + it->second.userTime);
+                            // Нормалізуємо на кількість ядер (systemTimeDelta вже сумарний по всіх ядрах)
+                            info.cpuPercent = (static_cast<double>(procDelta) / static_cast<double>(systemTimeDelta)) * 100.0 * numCores;
+                            if (info.cpuPercent < 0.0) info.cpuPercent = 0.0;
+                            if (info.cpuPercent > 100.0 * numCores) info.cpuPercent = 100.0 * numCores;
+                        }
+                    }
+
+                    // Зберігаємо поточні значення для наступного виклику
+                    newCpuMap[pe.th32ProcessID] = { kt, ut, curSystemTime };
                 }
 
                 // MEM%
@@ -173,6 +205,11 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
         } while (Process32NextW(hSnapshot, &pe));
     }
     CloseHandle(hSnapshot);
+
+    // Оновлюємо збережені дані для наступної ітерації
+    prevCpuMap_ = std::move(newCpuMap);
+    prevSystemTime_ = curSystemTime;
+
     return processList;
 }
 

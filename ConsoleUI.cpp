@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <tlhelp32.h>
 
 enum ConsoleColors {
     BLACK = 0, BLUE = 1, GREEN = 2, CYAN = 3, RED = 4, MAGENTA = 5, BROWN = 6, LIGHTGRAY = 7,
@@ -152,7 +153,22 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     // РЯДКИ СТАТИСТИКИ
     DrawWideBar(L"Mem", usedMemG, totalMemG, L"G", FG_BRIGHT_GREEN);
     SetColor(FG_BRIGHT_CYAN); std::wcout << L"  Tasks: "; SetColor(WHITE);
-    std::wcout << processes.size() << L", 128 thr; 1 running" << std::endl;
+    // Підрахунок реальних потоків та running-процесів
+    int runningCount = 0;
+    int totalThreads = 0;
+    for (const auto& p : processes) {
+        if (p.state == L'R') runningCount++;
+    }
+    // Підрахунок потоків через snapshot
+    HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (hThreadSnap != INVALID_HANDLE_VALUE) {
+        THREADENTRY32 te = { sizeof(THREADENTRY32) };
+        if (Thread32First(hThreadSnap, &te)) {
+            do { totalThreads++; } while (Thread32Next(hThreadSnap, &te));
+        }
+        CloseHandle(hThreadSnap);
+    }
+    std::wcout << processes.size() << L", " << totalThreads << L" thr; " << runningCount << L" running" << std::endl;
 
     DrawWideBar(L"Swp", usedPageG, totalPageG, L"G", FG_BRIGHT_RED);
     SetColor(FG_BRIGHT_CYAN); std::wcout << L"  Load avg: "; SetColor(WHITE);
