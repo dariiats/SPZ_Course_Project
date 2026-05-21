@@ -315,7 +315,15 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
             if (printedCount != 0) SetColor(WHITE);
         }
 
-        std::wcout << std::left << std::setw(cmdColW) << name << std::endl;
+        std::wcout << std::left << std::setw(cmdColW) << name;
+
+        // Заповнити залишок рядка пробілами
+        HANDLE hLine = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO lbi;
+        GetConsoleScreenBufferInfo(hLine, &lbi);
+        int pad = lbi.dwSize.X - lbi.dwCursorPosition.X;
+        if (pad > 0) { DWORD wr; FillConsoleOutputCharacterW(hLine, L' ', pad, lbi.dwCursorPosition, &wr); FillConsoleOutputAttribute(hLine, WHITE, pad, lbi.dwCursorPosition, &wr); }
+        std::wcout << std::endl;
         if (printedCount == 0) SetColor(WHITE);
         printedCount++;
     }
@@ -336,7 +344,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
     SetColor(WHITE);
-    // Заливаємо залишок рядка пробілами
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
 }
 
