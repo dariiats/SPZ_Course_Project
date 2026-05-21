@@ -12,12 +12,21 @@ enum class TabView {
     IO
 };
 
+enum class SortColumn {
+    Memory,   // RES
+    Cpu,      // CPU%
+    Pid,      // PID
+    Name,     // COMMAND
+    Time      // TIME+
+};
+
 struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
     bool showHelp = false;
     int pageOffset = 0;
     TabView activeTab = TabView::Main;
+    SortColumn sortColumn = SortColumn::Memory;
 };
 
 class LocalizationManager {

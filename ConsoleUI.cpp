@@ -99,8 +99,10 @@ void ConsoleUI::RenderHelp(Language lang) {
     SetColor(WHITE);
     std::wcout << L"  [F1 / H] - Close/open this help window\n"
         << L"  [F2 / L] - Toggle language (UA / EN)\n"
+        << L"  [F3 / S] - Cycle sort column (MEM > CPU > PID > NAME > TIME)\n"
         << L"  [F6 / I] - Change refresh interval\n"
         << L"  [F9 / K] - Kill process via PID\n"
+        << L"  [Tab]    - Switch tab (Main / IO)\n"
         << L"  [<- / ->] - Page scroll\n\n Press [H] to return...";
     for (int i = 0; i < 20; i++) std::wcout << std::setw(w) << L" " << std::endl;
 }
@@ -145,10 +147,10 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::vector<ProcessInfo> processes = SystemManager::GetProcesses();
 
     ULONGLONG uptimeMs = GetTickCount64();
-    int days = uptimeMs / (1000 * 60 * 60 * 24);
-    int hours = (uptimeMs / (1000 * 60 * 60)) % 24;
-    int mins = (uptimeMs / (1000 * 60)) % 60;
-    int secs = (uptimeMs / 1000) % 60;
+    int days = static_cast<int>(uptimeMs / (1000ULL * 60 * 60 * 24));
+    int hours = static_cast<int>((uptimeMs / (1000ULL * 60 * 60)) % 24);
+    int mins = static_cast<int>((uptimeMs / (1000ULL * 60)) % 60);
+    int secs = static_cast<int>((uptimeMs / 1000ULL) % 60);
 
     // РЯДКИ СТАТИСТИКИ
     DrawWideBar(L"Mem", usedMemG, totalMemG, L"G", FG_BRIGHT_GREEN);
@@ -208,8 +210,20 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         int fixedColsWidth = 7 + 9 + 4 + 4 + 7 + 7 + 7 + 2 + 6 + 6 + 10;
         cmdColW = termWidth - fixedColsWidth;
         if (cmdColW < 15) cmdColW = 15;
+
+        // Маркер сортування
+        std::wstring mPid = L"  PID", mCpu = L"CPU%", mMem = L"MEM%", mTime = L"TIME+", mCmd = (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"COMMAND");
+        const wchar_t arrow = L'\x25BC';
+        switch (config.sortColumn) {
+            case SortColumn::Pid:    mPid = std::wstring(L" PID") + arrow; break;
+            case SortColumn::Cpu:    mCpu = std::wstring(L"CPU") + arrow; break;
+            case SortColumn::Memory: mMem = std::wstring(L"MEM") + arrow; break;
+            case SortColumn::Time:   mTime = std::wstring(L"TIME") + arrow; break;
+            case SortColumn::Name:   mCmd = arrow + (config.lang == Language::Ukrainian ? std::wstring(L"КОМАНДА") : std::wstring(L"COMMAND")); break;
+        }
+
         std::wcout << std::left
-            << std::setw(7) << L"  PID"
+            << std::setw(7) << mPid
             << std::setw(9) << L"USER"
             << std::setw(4) << L"PRI"
             << std::setw(4) << L"NI"
@@ -217,10 +231,10 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             << std::setw(7) << L"RES"
             << std::setw(7) << L"SHR"
             << std::setw(2) << L"S"
-            << std::setw(6) << L"CPU%"
-            << std::setw(6) << L"MEM%"
-            << std::setw(10) << L"TIME+"
-            << std::setw(cmdColW) << (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"COMMAND")
+            << std::setw(6) << mCpu
+            << std::setw(6) << mMem
+            << std::setw(10) << mTime
+            << std::setw(cmdColW) << mCmd
             << std::endl;
     } else {
         // I/O columns: PID(7) USER(9) IO(4) DISK_RW(9) DISK_READ(11) DISK_WRITE(12) SWPD%(6) IOD%(6) COMMAND(rest)
@@ -244,7 +258,14 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
         if (config.activeTab == TabView::IO)
             return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
-        return a.memoryUsage > b.memoryUsage;
+        switch (config.sortColumn) {
+            case SortColumn::Cpu:    return a.cpuPercent > b.cpuPercent;
+            case SortColumn::Pid:    return a.pid > b.pid;
+            case SortColumn::Name:   return a.name < b.name;
+            case SortColumn::Time:   return a.cpuTime > b.cpuTime;
+            case SortColumn::Memory:
+            default:                 return a.memoryUsage > b.memoryUsage;
+        }
     });
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
@@ -347,6 +368,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     SetColor(BLACK);
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F1 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F2 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
+    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F3 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" Tab"; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F6 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F9 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
