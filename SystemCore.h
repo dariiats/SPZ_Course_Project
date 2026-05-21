@@ -1,12 +1,5 @@
 // SystemCore.h
 #pragma once
-#ifndef SYSTEMCORE_H
-#define SYSTEMCORE_H
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-
 #include <windows.h>
 #include <vector>
 #include <string>
@@ -24,11 +17,6 @@ struct ProcessInfo {
     double memPercent;       // MEM%
     ULONGLONG cpuTime;       // TIME+ (in milliseconds)
     wchar_t state;           // S (R/S/Z/T)
-    // I/O fields
-    ULONGLONG ioReadBytes;   // Disk Read
-    ULONGLONG ioWriteBytes;  // Disk Write
-    ULONGLONG ioReadOps;     // Read operations count
-    ULONGLONG ioWriteOps;    // Write operations count
 };
 
 class CpuMonitor {
@@ -49,5 +37,3 @@ public:
     static std::vector<ProcessInfo> GetProcesses();
     static DWORD KillProcess(DWORD pid);
 };
-
-#endif // SYSTEMCORE_H

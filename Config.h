@@ -1,8 +1,5 @@
 // Config.h
 #pragma once
-#ifndef CONFIG_H
-#define CONFIG_H
-
 #include <string>
 
 enum class Language {
@@ -10,20 +7,11 @@ enum class Language {
     English
 };
 
-enum class TabView {
-    Main,
-    IO
-};
-
 struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
     bool showHelp = false;
-    int scrollOffset = 0;
-    int pageOffset = 0;
-    TabView activeTab = TabView::Main;
-    int selectedRow = 0;
-    int visibleRows = 20;
+    int pageOffset = 0; // Зміщення для гортання процесів
 };
 
 class LocalizationManager {
@@ -52,5 +40,3 @@ public:
         return L"";
     }
 };
-
-#endif // CONFIG_H
