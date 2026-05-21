@@ -8,109 +8,125 @@
 #include <cmath>
 #include <tlhelp32.h>
 
-enum ConsoleColors {
-    BLACK = 0, BLUE = 1, GREEN = 2, CYAN = 3, RED = 4, MAGENTA = 5, BROWN = 6, LIGHTGRAY = 7,
-    DARKGRAY = 8, LIGHTBLUE = 9, LIGHTGREEN = 10, LIGHTCYAN = 11, LIGHTRED = 12, WHITE = 15,
-    BG_GREEN_FG_BLACK = (GREEN << 4) | BLACK,
-    BG_CYAN_FG_BLACK = (CYAN << 4) | BLACK,
-    FG_BRIGHT_GREEN = LIGHTGREEN,
-    FG_BRIGHT_CYAN = LIGHTCYAN,
-    FG_BRIGHT_RED = LIGHTRED
-};
+// === Virtual Terminal Sequences ===
+// Foreground colors
+#define VT_RESET        L"\x1b[0m"
+#define VT_FG_BLACK     L"\x1b[30m"
+#define VT_FG_RED       L"\x1b[31m"
+#define VT_FG_GREEN     L"\x1b[32m"
+#define VT_FG_YELLOW    L"\x1b[33m"
+#define VT_FG_BLUE      L"\x1b[34m"
+#define VT_FG_MAGENTA   L"\x1b[35m"
+#define VT_FG_CYAN      L"\x1b[36m"
+#define VT_FG_WHITE     L"\x1b[37m"
+#define VT_FG_BRIGHT_RED    L"\x1b[91m"
+#define VT_FG_BRIGHT_GREEN  L"\x1b[92m"
+#define VT_FG_BRIGHT_CYAN   L"\x1b[96m"
+#define VT_FG_BRIGHT_WHITE  L"\x1b[97m"
+#define VT_FG_DARKGRAY      L"\x1b[90m"
 
-void SetColor(WORD color) {
-    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
-}
+// Background colors
+#define VT_BG_BLACK     L"\x1b[40m"
+#define VT_BG_GREEN     L"\x1b[42m"
+#define VT_BG_CYAN      L"\x1b[46m"
+#define VT_BG_DARKGRAY  L"\x1b[100m"
 
-// НОВА ФУНКЦІЯ: Отримання поточної ширини консолі
+// Cursor control
+#define VT_CURSOR_HOME  L"\x1b[H"
+#define VT_CURSOR_HIDE  L"\x1b[?25l"
+#define VT_CURSOR_SHOW  L"\x1b[?25h"
+#define VT_CLEAR_SCREEN L"\x1b[2J"
+#define VT_CLEAR_LINE   L"\x1b[K"
+
+// Отримання поточної ширини консолі
 int GetConsoleWidth() {
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
     int width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    return (width > 60) ? width : 60; // Мінімальна ширина 60 символів
+    return (width > 60) ? width : 60;
 }
 
 void ConsoleUI::InitConsole() {
     std::setlocale(LC_ALL, "");
-    SetCursorVisibility(false);
+
+    // Увімкнення Virtual Terminal Processing
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwMode = 0;
+    GetConsoleMode(hOut, &dwMode);
+    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    SetConsoleMode(hOut, dwMode);
+
+    std::wcout << VT_CURSOR_HIDE;
 }
 
 void ConsoleUI::ResetCursor() {
-    COORD coord = { 0, 0 };
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+    std::wcout << VT_CURSOR_HOME;
 }
 
 void ConsoleUI::SetCursorVisibility(bool visible) {
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_CURSOR_INFO cursorInfo;
-    GetConsoleCursorInfo(hConsole, &cursorInfo);
-    cursorInfo.bVisible = visible;
-    SetConsoleCursorInfo(hConsole, &cursorInfo);
+    std::wcout << (visible ? VT_CURSOR_SHOW : VT_CURSOR_HIDE);
 }
 
-void DrawCoreBar(int coreId, double percentage) {
-    SetColor(FG_BRIGHT_CYAN);
-    std::wcout << std::right << std::setw(2) << coreId;
-    SetColor(WHITE);
-    std::wcout << L"[";
+static void DrawCoreBar(int coreId, double percentage) {
+    std::wcout << VT_FG_BRIGHT_CYAN << std::right << std::setw(2) << coreId;
+    std::wcout << VT_RESET << L"[";
 
     int totalBars = 15;
     int filledBars = static_cast<int>((percentage / 100.0) * totalBars);
-    WORD barColor = (percentage > 80.0) ? FG_BRIGHT_RED : FG_BRIGHT_GREEN;
+    const wchar_t* barColor = (percentage > 80.0) ? VT_FG_BRIGHT_RED : VT_FG_BRIGHT_GREEN;
 
-    SetColor(barColor);
+    std::wcout << barColor;
     for (int i = 0; i < totalBars; ++i) {
         if (i < filledBars) std::wcout << L"|";
         else std::wcout << L" ";
     }
 
-    SetColor(WHITE);
-    std::wcout << L" ";
+    std::wcout << VT_RESET << L" ";
     std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << percentage << L"%";
     std::wcout << L"]  ";
 }
 
-void DrawWideBar(std::wstring label, double used, double total, std::wstring unit, WORD barColor) {
-    SetColor(FG_BRIGHT_CYAN);
-    std::wcout << std::left << std::setw(4) << label;
-    SetColor(WHITE);
-    std::wcout << L"[";
+static void DrawWideBar(std::wstring label, double used, double total, const wchar_t* barColor) {
+    std::wcout << VT_FG_BRIGHT_CYAN << std::left << std::setw(4) << label;
+    std::wcout << VT_RESET << L"[";
 
     int totalBars = 35;
     double percentage = (used / total) * 100.0;
     int filledBars = static_cast<int>((percentage / 100.0) * totalBars);
 
-    SetColor(barColor);
+    std::wcout << barColor;
     for (int i = 0; i < totalBars; ++i) {
         if (i < filledBars) std::wcout << L"|";
         else std::wcout << L" ";
     }
 
-    SetColor(WHITE);
-    std::wcout << std::right << std::fixed << std::setprecision(2) << std::setw(5) << used << L"G/"
-        << std::setprecision(2) << total << L"G]";
+    std::wcout << VT_RESET << std::right << std::fixed << std::setprecision(2)
+        << std::setw(5) << used << L"G/" << std::setprecision(2) << total << L"G]";
 }
 
 void ConsoleUI::RenderHelp(Language lang) {
     int w = GetConsoleWidth();
     ResetCursor();
-    SetColor(FG_BRIGHT_CYAN);
-    std::wcout << L"=== " << (lang == Language::Ukrainian ? L"ДОВІДКА" : L"HELP SYSTEM") << L" ===" << std::setw(w - 15) << L" " << std::endl;
-    SetColor(WHITE);
-    std::wcout << L"  [F1 / H] - Close/open this help window\n"
+    std::wcout << VT_FG_BRIGHT_CYAN
+        << L"=== " << (lang == Language::Ukrainian ? L"ДОВІДКА" : L"HELP SYSTEM") << L" ==="
+        << std::setw(w - 15) << L" " << std::endl;
+    std::wcout << VT_RESET
+        << L"  [F1 / H] - Close/open this help window\n"
         << L"  [F2 / L] - Toggle language (UA / EN)\n"
         << L"  [F3 / S] - Open sort menu (arrows + Enter/Esc)\n"
+        << L"  [F4 / R] - Toggle sort direction (Asc/Desc)\n"
         << L"  [F6 / I] - Change refresh interval\n"
         << L"  [F9 / K] - Kill process via PID\n"
         << L"  [Tab]    - Switch tab (Main / IO)\n"
-        << L"  [<- / ->] - Page scroll\n\n Press [H] to return...";
-    for (int i = 0; i < 20; i++) std::wcout << std::setw(w) << L" " << std::endl;
+        << L"  [Up/Down]  - Select process\n"
+        << L"  [<- / ->]  - Page scroll\n\n Press [H] to return...";
+    for (int i = 0; i < 18; i++) std::wcout << std::setw(w) << L" " << std::endl;
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     ResetCursor();
-    int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
-    std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
+    int termWidth = GetConsoleWidth();
+    std::wstring separator(termWidth, L'-');
 
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
@@ -129,12 +145,11 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 if (simulatedCoreLoad < 0) simulatedCoreLoad = 0;
                 if (simulatedCoreLoad > 100) simulatedCoreLoad = 100;
                 DrawCoreBar(coreIdx, simulatedCoreLoad);
-            }
-            else {
+            } else {
                 std::wcout << std::setw(28) << L" ";
             }
         }
-        std::wcout << std::endl;
+        std::wcout << VT_CLEAR_LINE << std::endl;
     }
 
     MEMORYSTATUSEX memInfo = { sizeof(MEMORYSTATUSEX) };
@@ -153,15 +168,13 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     int secs = static_cast<int>((uptimeMs / 1000ULL) % 60);
 
     // РЯДКИ СТАТИСТИКИ
-    DrawWideBar(L"Mem", usedMemG, totalMemG, L"G", FG_BRIGHT_GREEN);
-    SetColor(FG_BRIGHT_CYAN); std::wcout << L"  Tasks: "; SetColor(WHITE);
-    // Підрахунок реальних потоків та running-процесів
+    DrawWideBar(L"Mem", usedMemG, totalMemG, VT_FG_BRIGHT_GREEN);
+    std::wcout << VT_FG_BRIGHT_CYAN << L"  Tasks: " << VT_RESET;
     int runningCount = 0;
     int totalThreads = 0;
     for (const auto& p : processes) {
         if (p.state == L'R') runningCount++;
     }
-    // Підрахунок потоків через snapshot
     HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (hThreadSnap != INVALID_HANDLE_VALUE) {
         THREADENTRY32 te = { sizeof(THREADENTRY32) };
@@ -170,40 +183,39 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         }
         CloseHandle(hThreadSnap);
     }
-    std::wcout << processes.size() << L", " << totalThreads << L" thr; " << runningCount << L" running" << std::endl;
+    std::wcout << processes.size() << L", " << totalThreads << L" thr; "
+        << runningCount << L" running" << VT_CLEAR_LINE << std::endl;
 
-    DrawWideBar(L"Swp", usedPageG, totalPageG, L"G", FG_BRIGHT_RED);
-    SetColor(FG_BRIGHT_CYAN); std::wcout << L"  Load avg: "; SetColor(WHITE);
+    DrawWideBar(L"Swp", usedPageG, totalPageG, VT_FG_BRIGHT_RED);
+    std::wcout << VT_FG_BRIGHT_CYAN << L"  Load avg: " << VT_RESET;
     std::wcout << std::fixed << std::setprecision(2) << (overallCpu / 100.0) + 0.15 << L" "
-        << (overallCpu / 100.0) + 0.08 << L" " << (overallCpu / 100.0) + 0.02 << std::endl;
+        << (overallCpu / 100.0) + 0.08 << L" " << (overallCpu / 100.0) + 0.02
+        << VT_CLEAR_LINE << std::endl;
 
-    SetColor(FG_BRIGHT_CYAN); std::wcout << std::setw(51) << L" " << L"  Uptime: "; SetColor(WHITE);
+    std::wcout << VT_FG_BRIGHT_CYAN << std::setw(51) << L" " << L"  Uptime: " << VT_RESET;
     if (days > 0) std::wcout << days << L" days, ";
     std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
-        << std::setw(2) << mins << L":" << std::setw(2) << secs << std::setfill(L' ') << std::endl;
+        << std::setw(2) << mins << L":" << std::setw(2) << secs
+        << std::setfill(L' ') << VT_CLEAR_LINE << std::endl;
 
     // === ВКЛАДКИ ===
-    SetColor(DARKGRAY);
-    std::wcout << separator << std::endl;
+    std::wcout << VT_FG_DARKGRAY << separator << std::endl;
 
-    if (config.activeTab == TabView::Main) {
-        SetColor(BG_GREEN_FG_BLACK);
-    } else {
-        SetColor((DARKGRAY << 4) | BLACK);
-    }
+    if (config.activeTab == TabView::Main)
+        std::wcout << VT_BG_GREEN << VT_FG_BLACK;
+    else
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BLACK;
     std::wcout << L" Main ";
 
-    if (config.activeTab == TabView::IO) {
-        SetColor(BG_GREEN_FG_BLACK);
-    } else {
-        SetColor((DARKGRAY << 4) | BLACK);
-    }
+    if (config.activeTab == TabView::IO)
+        std::wcout << VT_BG_GREEN << VT_FG_BLACK;
+    else
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BLACK;
     std::wcout << L" I/O ";
-    SetColor(WHITE);
-    std::wcout << std::setw(termWidth - 12) << L" " << std::endl;
+    std::wcout << VT_RESET << std::setw(termWidth - 12) << L" " << std::endl;
 
     // === ШАПКА ТАБЛИЦІ ===
-    SetColor(BG_GREEN_FG_BLACK);
+    std::wcout << VT_BG_GREEN << VT_FG_BLACK;
 
     int cmdColW;
     if (config.activeTab == TabView::Main) {
@@ -245,9 +257,8 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             << std::setw(6) << mMem
             << std::setw(10) << mTime
             << std::setw(cmdColW) << mCmd
-            << std::endl;
+            << VT_CLEAR_LINE << std::endl;
     } else {
-        // I/O columns: PID(7) USER(9) IO(4) DISK_RW(9) DISK_READ(11) DISK_WRITE(12) SWPD%(6) IOD%(6) COMMAND(rest)
         int fixedIOWidth = 7 + 9 + 4 + 9 + 11 + 12 + 6 + 6;
         cmdColW = termWidth - fixedIOWidth;
         if (cmdColW < 15) cmdColW = 15;
@@ -261,10 +272,11 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             << std::setw(6) << L"SWPD%"
             << std::setw(6) << L"IOD%"
             << std::setw(cmdColW) << L"Command"
-            << std::endl;
+            << VT_CLEAR_LINE << std::endl;
     }
-    SetColor(WHITE);
+    std::wcout << VT_RESET;
 
+    // === СОРТУВАННЯ ===
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
         if (config.activeTab == TabView::IO)
             return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
@@ -293,6 +305,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         config.selectedRow = (std::min)(15, (int)processes.size() - config.pageOffset) - 1;
     if (config.selectedRow < 0) config.selectedRow = 0;
 
+    // === РЯДКИ ПРОЦЕСІВ ===
     int printedCount = 0;
     for (int i = config.pageOffset; i < (std::min)(config.pageOffset + 15, (int)processes.size()); ++i) {
         const auto& proc = processes[i];
@@ -323,30 +336,34 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
         bool isSelected = (printedCount == config.selectedRow);
 
-        if (isSelected) { SetColor(BG_CYAN_FG_BLACK); }
-        else { SetColor(FG_BRIGHT_CYAN); }
+        if (isSelected) {
+            std::wcout << VT_BG_CYAN << VT_FG_BLACK;
+        } else {
+            std::wcout << VT_FG_BRIGHT_CYAN;
+        }
 
         std::wcout << std::right << std::setw(6) << proc.pid << L" ";
-        if (!isSelected) SetColor(WHITE);
+        if (!isSelected) std::wcout << VT_RESET;
         std::wcout << std::left << std::setw(9) << user;
 
         if (config.activeTab == TabView::Main) {
             std::wcout << std::right << std::setw(3) << proc.priority << L" ";
             std::wcout << std::right << std::setw(3) << proc.niceness << L" ";
             std::wcout << std::right << std::setw(6) << formatMem(proc.virtualMemory) << L" ";
-            if (!isSelected) SetColor(FG_BRIGHT_GREEN);
+            if (!isSelected) std::wcout << VT_FG_BRIGHT_GREEN;
             std::wcout << std::right << std::setw(6) << formatMem(proc.memoryUsage) << L" ";
-            if (!isSelected) SetColor(WHITE);
+            if (!isSelected) std::wcout << VT_RESET;
             std::wcout << std::right << std::setw(6) << formatMem(proc.sharedMemory) << L" ";
             std::wcout << proc.state << L" ";
-            if (!isSelected && proc.cpuPercent > 5.0) SetColor(FG_BRIGHT_RED);
-            else if (!isSelected) SetColor(FG_BRIGHT_GREEN);
+            if (!isSelected) {
+                if (proc.cpuPercent > 5.0) std::wcout << VT_FG_BRIGHT_RED;
+                else std::wcout << VT_FG_BRIGHT_GREEN;
+            }
             std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.cpuPercent;
-            if (!isSelected) SetColor(WHITE);
+            if (!isSelected) std::wcout << VT_RESET;
             std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.memPercent << L" ";
             std::wcout << std::right << std::setw(9) << formatTime(proc.cpuTime) << L" ";
         } else {
-            // I/O tab
             auto formatIO = [](ULONGLONG bytes) -> std::wstring {
                 wchar_t buf[16];
                 if (bytes >= 1024ULL * 1024 * 1024) swprintf(buf, 16, L"%.1fG", bytes / (1024.0 * 1024.0 * 1024.0));
@@ -356,52 +373,43 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 return buf;
             };
 
-            // IO priority (B4 = background)
             std::wcout << std::left << std::setw(3) << L"B4" << L" ";
-            // DISK R/W (combined rate)
-            if (!isSelected) SetColor(WHITE);
+            if (!isSelected) std::wcout << VT_RESET;
             std::wstring rw = formatIO(proc.ioDiskRead) + L"/s";
             std::wcout << std::right << std::setw(8) << rw << L" ";
-            // DISK READ
-            if (!isSelected) SetColor(FG_BRIGHT_GREEN);
+            if (!isSelected) std::wcout << VT_FG_BRIGHT_GREEN;
             std::wstring dr = formatIO(proc.ioReadBytes) + L"/s";
             std::wcout << std::right << std::setw(10) << dr << L" ";
-            // DISK WRITE
-            if (!isSelected) SetColor(FG_BRIGHT_RED);
+            if (!isSelected) std::wcout << VT_FG_BRIGHT_RED;
             std::wstring dw = formatIO(proc.ioWriteBytes) + L"/s";
             std::wcout << std::right << std::setw(11) << dw << L" ";
-            // SWPD%
-            if (!isSelected) SetColor(WHITE);
+            if (!isSelected) std::wcout << VT_RESET;
             std::wcout << std::right << std::setw(5) << L"N/A" << L" ";
-            // IOD%
             std::wcout << std::right << std::setw(5) << L"N/A" << L" ";
-            if (!isSelected) SetColor(WHITE);
         }
 
-        std::wcout << std::left << std::setw(cmdColW) << name << std::endl;
-        SetColor(WHITE);
+        std::wcout << std::left << std::setw(cmdColW) << name;
+        std::wcout << VT_RESET << VT_CLEAR_LINE << std::endl;
         printedCount++;
     }
 
-    SetColor(WHITE);
-    while (printedCount < 15) { std::wcout << std::setw(termWidth) << L" " << std::endl; printedCount++; }
+    // Заповнення порожніх рядків
+    while (printedCount < 15) {
+        std::wcout << VT_CLEAR_LINE << std::setw(termWidth) << L" " << std::endl;
+        printedCount++;
+    }
 
-    SetColor(DARKGRAY);
-    std::wcout << separator << std::endl;
+    // === НИЖНЯ ПАНЕЛЬ ===
+    std::wcout << VT_FG_DARKGRAY << separator << std::endl;
 
-    // НИЖНЯ ПАНЕЛЬ: F-КЛАВІШІ
-    SetColor(BLACK);
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F1 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F2 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F3 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F4 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.sortAscending ? L"Asc " : L"Desc");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" Tab"; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F6 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" F9 "; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
-
-    SetColor(WHITE);
-    // Заливаємо залишок рядка пробілами
-    std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"Asc " : L"Desc");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
+    std::wcout << VT_RESET << VT_CLEAR_LINE << std::endl;
 }
 
 void ConsoleUI::RenderSortMenu(AppConfig& config) {
@@ -414,75 +422,66 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
     };
     const int itemCount = 12;
 
-    // Рядок "Sort by" зверху
-    SetColor(BG_GREEN_FG_BLACK);
-    std::wcout << L" Sort by" << std::setw(termWidth - 8) << L" " << std::endl;
+    // Заголовок
+    std::wcout << VT_BG_GREEN << VT_FG_BLACK << L" Sort by"
+        << std::setw(termWidth - 8) << L" " << VT_RESET << std::endl;
 
     for (int i = 0; i < itemCount; ++i) {
         if (i == config.sortMenuIndex) {
-            SetColor(BG_CYAN_FG_BLACK);
+            std::wcout << VT_BG_CYAN << VT_FG_BLACK;
         } else {
-            SetColor(WHITE);
+            std::wcout << VT_RESET;
         }
-        std::wcout << L"  " << std::left << std::setw(termWidth - 2) << items[i] << std::endl;
+        std::wcout << L"  " << std::left << std::setw(termWidth - 2) << items[i]
+            << VT_RESET << std::endl;
     }
 
-    // Заповнюємо решту рядків
-    SetColor(WHITE);
+    // Заповнення
+    std::wcout << VT_RESET;
     for (int i = itemCount + 1; i < 25; ++i) {
-        std::wcout << std::setw(termWidth) << L" " << std::endl;
+        std::wcout << VT_CLEAR_LINE << std::setw(termWidth) << L" " << std::endl;
     }
 
     // Нижня панель
-    SetColor(DARKGRAY);
-    std::wstring separator(termWidth, L'-');
-    std::wcout << separator << std::endl;
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L"Enter";
-    SetColor((CYAN << 4) | BLACK); std::wcout << L"Sort  ";
-    SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" Esc ";
-    SetColor((CYAN << 4) | BLACK); std::wcout << L"Cancel";
-    SetColor(WHITE);
-    std::wcout << std::setw(termWidth - 22) << L" " << std::endl;
+    std::wcout << VT_FG_DARKGRAY << std::wstring(termWidth, L'-') << std::endl;
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L"Enter"
+        << VT_BG_CYAN << VT_FG_BLACK << L"Sort  "
+        << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Esc "
+        << VT_BG_CYAN << VT_FG_BLACK << L"Cancel"
+        << VT_RESET << VT_CLEAR_LINE << std::endl;
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
-    SetCursorVisibility(true);
-    SetColor(FG_BRIGHT_RED);
+    std::wcout << VT_CURSOR_SHOW;
     DWORD pidToKill = 0;
 
-    std::wcout << (config.lang == Language::Ukrainian ? L"\n[KILL] Введіть PID процесу: " : L"\n[KILL] Enter Target PID: ");
-    SetColor(WHITE);
+    std::wcout << VT_FG_BRIGHT_RED
+        << (config.lang == Language::Ukrainian ? L"\n[KILL] Введіть PID процесу: " : L"\n[KILL] Enter Target PID: ")
+        << VT_RESET;
     std::cin >> pidToKill;
 
     if (std::cin.fail()) {
         std::cin.clear();
         (std::cin.ignore)((std::numeric_limits<std::streamsize>::max)(), '\n');
-        SetColor(FG_BRIGHT_RED);
-        std::wcout << (config.lang == Language::Ukrainian ? L"[Помилка] Некоректний формат!" : L"[Error] Invalid PID format!");
+        std::wcout << VT_FG_BRIGHT_RED
+            << (config.lang == Language::Ukrainian ? L"[Помилка] Некоректний формат!" : L"[Error] Invalid PID format!")
+            << VT_RESET;
         Sleep(1200);
-        SetCursorVisibility(false);
-        system("cls");
+        std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
         cpuMon.Reset();
         return;
     }
 
     DWORD result = SystemManager::KillProcess(pidToKill);
     if (result == 0) {
-        SetColor(FG_BRIGHT_GREEN);
-        std::wcout << LocalizationManager::GetText("success", config.lang);
-    }
-    else if (result == ERROR_ACCESS_DENIED) {
-        SetColor(FG_BRIGHT_RED);
-        std::wcout << LocalizationManager::GetText("access_denied", config.lang);
-    }
-    else {
-        SetColor(FG_BRIGHT_RED);
-        std::wcout << LocalizationManager::GetText("not_found", config.lang);
+        std::wcout << VT_FG_BRIGHT_GREEN << LocalizationManager::GetText("success", config.lang);
+    } else if (result == ERROR_ACCESS_DENIED) {
+        std::wcout << VT_FG_BRIGHT_RED << LocalizationManager::GetText("access_denied", config.lang);
+    } else {
+        std::wcout << VT_FG_BRIGHT_RED << LocalizationManager::GetText("not_found", config.lang);
     }
 
     Sleep(1200);
-    SetColor(WHITE);
-    SetCursorVisibility(false);
-    system("cls");
+    std::wcout << VT_RESET << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
     cpuMon.Reset();
 }
