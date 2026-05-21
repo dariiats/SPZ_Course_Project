@@ -39,6 +39,19 @@ int main() {
             Sleep(250);
         }
 
+        // [F3] або [S] - Перемикання сортування
+        if ((GetAsyncKeyState(VK_F3) & 0x8000) || (GetAsyncKeyState('S') & 0x8000)) {
+            switch (config.sortColumn) {
+                case SortColumn::Memory: config.sortColumn = SortColumn::Cpu; break;
+                case SortColumn::Cpu: config.sortColumn = SortColumn::Pid; break;
+                case SortColumn::Pid: config.sortColumn = SortColumn::Name; break;
+                case SortColumn::Name: config.sortColumn = SortColumn::Time; break;
+                case SortColumn::Time: config.sortColumn = SortColumn::Memory; break;
+            }
+            config.pageOffset = 0;
+            Sleep(250);
+        }
+
         // Гортання сторінок стрілками
         if (!config.showHelp) {
             size_t totalProcesses = SystemManager::GetProcesses().size();
