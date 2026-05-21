@@ -17,6 +17,8 @@ struct ProcessInfo {
     double memPercent;       // MEM%
     ULONGLONG cpuTime;       // TIME+ (in milliseconds)
     wchar_t state;           // S (R/S/Z/T)
+    ULONGLONG ioReadBytes;
+    ULONGLONG ioWriteBytes;
 };
 
 class CpuMonitor {
