@@ -38,9 +38,13 @@ void ConsoleUI::InitConsole() {
     DWORD mode = 0;
     GetConsoleMode(hInput, &mode);
     mode |= ENABLE_MOUSE_INPUT;
-    mode &= ~ENABLE_QUICK_EDIT_MODE; // Вимкнути Quick Edit щоб миша працювала
+    mode &= ~ENABLE_QUICK_EDIT_MODE;
     mode |= ENABLE_EXTENDED_FLAGS;
     SetConsoleMode(hInput, mode);
+
+    // Вимкнення буферизації wcout для миттєвого виводу
+    std::wcout.sync_with_stdio(false);
+    std::wcout.flush();
 }
 
 void ConsoleUI::ResetCursor() {
@@ -73,7 +77,10 @@ void DrawCoreBar(int coreId, double percentage) {
     }
 
     SetColor(WHITE);
-    std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(6) << percentage << L"%";
+    // Форматуємо в буфер щоб уникнути sticky formatting
+    wchar_t pctBuf[8];
+    swprintf(pctBuf, 8, L"%5.1f%%", percentage);
+    std::wcout << pctBuf;
     std::wcout << L"]  ";
 }
 
@@ -114,8 +121,9 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
+    std::wcout.flush(); // Flush перед перемальовуванням
     ResetCursor();
-    int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
+    int termWidth = GetConsoleWidth();
     std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
 
     SYSTEM_INFO sysInfo;
@@ -417,6 +425,137 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     SetColor(WHITE);
     // Заливаємо залишок рядка пробілами
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
+    std::wcout.flush(); // Атомарний вивід всього кадру
+}
+
+// Layout helpers: обчислюють позиції рядків на екрані
+int ConsoleUI::GetTabRowY() {
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    int numCores = sysInfo.dwNumberOfProcessors;
+    int numCols = (numCores > 8) ? 4 : 2;
+    int numRows = (numCores + numCols - 1) / numCols;
+    // core rows + Mem row + Swp row + Uptime row + separator row = numRows + 4
+    return numRows + 3 + 1; // +1 for separator
+}
+
+int ConsoleUI::GetHeaderRowY() {
+    return GetTabRowY() + 2; // tab row + header row
+}
+
+int ConsoleUI::GetFooterRowY() {
+    // Динамічно: header + visibleRows + separator
+    // Але тут ми не маємо config, тому використаємо консольну висоту
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    int consoleHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    return consoleHeight - 2; // Передостанній рядок (footer)
+}
+
+bool ConsoleUI::ProcessMouseInput(AppConfig& config, CpuMonitor& cpuMon) {
+    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD numEvents = 0;
+    GetNumberOfConsoleInputEvents(hInput, &numEvents);
+    if (numEvents == 0) return false;
+
+    // Читаємо ВСІ події з буфера щоб він не переповнювався
+    INPUT_RECORD inputRecord[128];
+    DWORD eventsRead = 0;
+    DWORD toRead = (numEvents > 128) ? 128 : numEvents;
+    ReadConsoleInput(hInput, inputRecord, toRead, &eventsRead);
+
+    bool needRedraw = false;
+
+    for (DWORD i = 0; i < eventsRead; ++i) {
+        if (inputRecord[i].EventType != MOUSE_EVENT) continue;
+
+        MOUSE_EVENT_RECORD& mouse = inputRecord[i].Event.MouseEvent;
+        SHORT mx = mouse.dwMousePosition.X;
+        SHORT my = mouse.dwMousePosition.Y;
+
+        // Клік лівою кнопкою
+        if (mouse.dwEventFlags == 0 && (mouse.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED)) {
+            int tabRow = GetTabRowY();
+            int headerRow = GetHeaderRowY();
+            int footerRow = GetFooterRowY();
+
+            // Клік на вкладки
+            if (my == tabRow) {
+                if (mx >= 0 && mx < 6) {
+                    if (config.activeTab != TabView::Main) {
+                        config.activeTab = TabView::Main;
+                        config.scrollOffset = 0;
+                        config.selectedRow = 0;
+                        needRedraw = true;
+                    }
+                } else if (mx >= 6 && mx < 12) {
+                    if (config.activeTab != TabView::IO) {
+                        config.activeTab = TabView::IO;
+                        config.scrollOffset = 0;
+                        config.selectedRow = 0;
+                        needRedraw = true;
+                    }
+                }
+            }
+
+            // Клік на рядок процесу
+            int firstProcessRow = headerRow + 1;
+            if (my >= firstProcessRow && my < firstProcessRow + config.visibleRows) {
+                int clickedVisibleRow = my - firstProcessRow;
+                int globalIdx = config.scrollOffset + clickedVisibleRow;
+                config.selectedRow = globalIdx;
+                needRedraw = true;
+            }
+
+            // Клік на нижню панель F-кнопок
+            if (my >= footerRow) {
+                if (mx < 12) {
+                    config.showHelp = !config.showHelp;
+                    system("cls");
+                    needRedraw = true;
+                } else if (mx < 24) {
+                    config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
+                    needRedraw = true;
+                } else if (mx < 36) {
+                    config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
+                    config.scrollOffset = 0;
+                    config.selectedRow = 0;
+                    needRedraw = true;
+                } else if (mx < 48) {
+                    if (config.refreshInterval == 1000) config.refreshInterval = 3000;
+                    else if (config.refreshInterval == 3000) config.refreshInterval = 5000;
+                    else config.refreshInterval = 1000;
+                    needRedraw = true;
+                } else if (mx < 60) {
+                    ConsoleUI::HandleKillDialog(config, cpuMon);
+                    needRedraw = true;
+                }
+            }
+        }
+
+        // Скрол колесиком миші (по 3 рядки)
+        if (mouse.dwEventFlags == MOUSE_WHEELED) {
+            int scrollDir = (SHORT)HIWORD(mouse.dwButtonState);
+            if (scrollDir > 0) {
+                config.scrollOffset -= 3;
+                if (config.scrollOffset < 0) config.scrollOffset = 0;
+                if (config.selectedRow >= config.scrollOffset + config.visibleRows)
+                    config.selectedRow = config.scrollOffset + config.visibleRows - 1;
+                needRedraw = true;
+            } else {
+                size_t totalProcesses = SystemManager::GetProcesses().size();
+                config.scrollOffset += 3;
+                if (config.scrollOffset > (int)totalProcesses - config.visibleRows)
+                    config.scrollOffset = (int)totalProcesses - config.visibleRows;
+                if (config.scrollOffset < 0) config.scrollOffset = 0;
+                if (config.selectedRow < config.scrollOffset)
+                    config.selectedRow = config.scrollOffset;
+                needRedraw = true;
+            }
+        }
+    }
+
+    return needRedraw;
 }
 
 // Layout helpers: обчислюють позиції рядків на екрані

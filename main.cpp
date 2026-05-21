@@ -11,6 +11,9 @@ int main() {
     cpuMon.GetCpuUsage();
     Sleep(100);
 
+    // Очистити буфер вводу від старих подій
+    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+
     ULONGLONG lastRenderTime = 0;
     bool forceRedraw = true;
 
@@ -59,14 +62,6 @@ int main() {
             ConsoleUI::HandleKillDialog(config, cpuMon);
             forceRedraw = true;
             inputHandled = true;
-        }
-        // [Tab] або [F3] - Перемикання вкладок
-        if ((GetAsyncKeyState(VK_TAB) & 0x8000) || (GetAsyncKeyState(VK_F3) & 0x8000)) {
-            config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
-            config.scrollOffset = 0;
-            config.selectedRow = 0;
-            system("cls");
-            Sleep(250);
         }
 
         // Навігація
@@ -142,7 +137,7 @@ int main() {
         }
 
         // Короткий sleep щоб не жерти 100% CPU, але реагувати швидко
-        Sleep(30);
+        Sleep(16);
     }
     return 0;
 }
