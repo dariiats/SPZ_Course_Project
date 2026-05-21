@@ -112,6 +112,8 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
             info.userName = L"-";
             info.ioReadBytes = 0;
             info.ioWriteBytes = 0;
+            info.ioDiskRead = 0;
+            info.ioDiskWrite = 0;
 
             HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
             if (hProcess != NULL) {
@@ -161,6 +163,8 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                 if (GetProcessIoCounters(hProcess, &ioCounters)) {
                     info.ioReadBytes = ioCounters.ReadTransferCount;
                     info.ioWriteBytes = ioCounters.WriteTransferCount;
+                    info.ioDiskRead = ioCounters.ReadTransferCount;
+                    info.ioDiskWrite = ioCounters.WriteTransferCount;
                 }
 
                 CloseHandle(hProcess);
