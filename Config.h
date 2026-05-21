@@ -13,20 +13,29 @@ enum class TabView {
 };
 
 enum class SortColumn {
-    Memory,   // RES
-    Cpu,      // CPU%
-    Pid,      // PID
-    Name,     // COMMAND
-    Time      // TIME+
+    Pid,
+    User,
+    Priority,
+    Nice,
+    Virt,
+    Res,
+    Shr,
+    State,
+    CpuPercent,
+    MemPercent,
+    Time,
+    Command
 };
 
 struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
     bool showHelp = false;
+    bool showSortMenu = false;
+    int sortMenuIndex = 5; // default = Res (index in menu list)
     int pageOffset = 0;
     TabView activeTab = TabView::Main;
-    SortColumn sortColumn = SortColumn::Memory;
+    SortColumn sortColumn = SortColumn::Res;
 };
 
 class LocalizationManager {

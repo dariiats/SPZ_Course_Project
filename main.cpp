@@ -39,17 +39,38 @@ int main() {
             Sleep(250);
         }
 
-        // [F3] або [S] - Перемикання сортування
+        // [F3] або [S] - Відкрити/закрити меню сортування
         if ((GetAsyncKeyState(VK_F3) & 0x8000) || (GetAsyncKeyState('S') & 0x8000)) {
-            switch (config.sortColumn) {
-                case SortColumn::Memory: config.sortColumn = SortColumn::Cpu; break;
-                case SortColumn::Cpu: config.sortColumn = SortColumn::Pid; break;
-                case SortColumn::Pid: config.sortColumn = SortColumn::Name; break;
-                case SortColumn::Name: config.sortColumn = SortColumn::Time; break;
-                case SortColumn::Time: config.sortColumn = SortColumn::Memory; break;
-            }
-            config.pageOffset = 0;
+            config.showSortMenu = !config.showSortMenu;
+            if (config.showSortMenu) system("cls");
             Sleep(250);
+        }
+
+        // Навігація в меню сортування
+        if (config.showSortMenu) {
+            if (GetAsyncKeyState(VK_UP) & 0x8000) {
+                if (config.sortMenuIndex > 0) config.sortMenuIndex--;
+                Sleep(150);
+            }
+            if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
+                if (config.sortMenuIndex < 11) config.sortMenuIndex++;
+                Sleep(150);
+            }
+            if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
+                config.sortColumn = static_cast<SortColumn>(config.sortMenuIndex);
+                config.showSortMenu = false;
+                config.pageOffset = 0;
+                system("cls");
+                Sleep(250);
+            }
+            if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+                config.showSortMenu = false;
+                system("cls");
+                Sleep(250);
+            }
+            ConsoleUI::RenderSortMenu(config);
+            Sleep(50);
+            continue;
         }
 
         // Гортання сторінок стрілками
