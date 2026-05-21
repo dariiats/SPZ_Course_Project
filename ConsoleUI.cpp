@@ -105,7 +105,7 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMonitor& procMon) {
-    ResetCursor();
+    system("cls");
     int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
     std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
 
