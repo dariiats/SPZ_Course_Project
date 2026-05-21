@@ -105,7 +105,7 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMonitor& procMon) {
-    ResetCursor();
+    system("cls");
     int termWidth = GetConsoleWidth(); // Отримуємо динамічну ширину
     std::wstring separator(termWidth, L'-'); // Гумова лінія-розділювач
 
@@ -336,7 +336,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
     SetColor(WHITE);
-    // Заливаємо залишок рядка пробілами
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
 }
 
