@@ -164,24 +164,31 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
         << std::setw(2) << mins << L":" << std::setw(2) << secs << std::setfill(L' ') << std::endl;
 
-    // РОЗРАХУНОК ДИНАМІЧНОЇ ШИРИНИ ТАБЛИЦІ
-    int pidColW = 9;
-    int memColW = 15;
-    int nameColW = termWidth - pidColW - memColW; // Решта простору йде на назву
-    if (nameColW < 20) nameColW = 20;
+    // РОЗРАХУНОК ДИНАМІЧНОЇ ШИРИНИ ТАБЛИЦІ (htop-style columns)
+    // PID(7) USER(9) PRI(4) NI(4) VIRT(7) RES(7) SHR(7) S(2) CPU%(6) MEM%(6) TIME+(10) COMMAND(rest)
+    int fixedColsWidth = 7 + 9 + 4 + 4 + 7 + 7 + 7 + 2 + 6 + 6 + 10; // = 69
+    int cmdColW = termWidth - fixedColsWidth;
+    if (cmdColW < 15) cmdColW = 15;
 
     SetColor(DARKGRAY);
     std::wcout << separator << std::endl;
 
-    // ШАПКА ТАБЛИЦІ
+    // ШАПКА ТАБЛИЦІ (htop-style)
     SetColor(BG_GREEN_FG_BLACK);
-    std::wstring hPid = L"  PID    ";
-    std::wstring hName = (config.lang == Language::Ukrainian ? L"НАЗВА ПРОЦЕСУ" : L"COMMAND");
-    std::wstring hMem = (config.lang == Language::Ukrainian ? L"ПАМ'ЯТЬ (МБ) " : L"MEMORY (MB)  ");
-
-    std::wcout << std::left << std::setw(pidColW) << hPid
-        << std::setw(nameColW) << hName
-        << std::right << std::setw(memColW) << hMem << std::endl;
+    std::wcout << std::left
+        << std::setw(7) << L"  PID"
+        << std::setw(9) << L"USER"
+        << std::setw(4) << L"PRI"
+        << std::setw(4) << L"NI"
+        << std::setw(7) << L"VIRT"
+        << std::setw(7) << L"RES"
+        << std::setw(7) << L"SHR"
+        << std::setw(2) << L"S"
+        << std::setw(6) << L"CPU%"
+        << std::setw(6) << L"MEM%"
+        << std::setw(10) << L"TIME+"
+        << std::setw(cmdColW) << (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"COMMAND")
+        << std::endl;
     SetColor(WHITE);
 
     std::sort(processes.begin(), processes.end(), [](const ProcessInfo& a, const ProcessInfo& b) {
@@ -193,27 +200,93 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     int printedCount = 0;
     for (int i = config.pageOffset; i < (std::min)(config.pageOffset + 15, (int)processes.size()); ++i) {
         const auto& proc = processes[i];
-        std::wstring name = proc.name;
 
-        // Обрізаємо назву процесу, якщо вона не влазить у поточну ширину вікна
-        if (name.length() > nameColW - 3) name = name.substr(0, nameColW - 4) + L"...";
+        // Format VIRT/RES/SHR in KB or MB
+        auto formatMem = [](SIZE_T bytes) -> std::wstring {
+            double kb = bytes / 1024.0;
+            if (kb >= 1024.0) {
+                double mb = kb / 1024.0;
+                wchar_t buf[16];
+                swprintf(buf, 16, L"%.0fM", mb);
+                return buf;
+            }
+            wchar_t buf[16];
+            swprintf(buf, 16, L"%.0fK", kb);
+            return buf;
+        };
+
+        // Format TIME+ as H:MM:SS or MM:SS.ss
+        auto formatTime = [](ULONGLONG ms) -> std::wstring {
+            int totalSec = (int)(ms / 1000);
+            int hours = totalSec / 3600;
+            int mins = (totalSec % 3600) / 60;
+            int secs = totalSec % 60;
+            int hundredths = (int)((ms % 1000) / 10);
+            wchar_t buf[20];
+            if (hours > 0)
+                swprintf(buf, 20, L"%d:%02d:%02d", hours, mins, secs);
+            else
+                swprintf(buf, 20, L"%d:%02d.%02d", mins, secs, hundredths);
+            return buf;
+        };
+
+        std::wstring name = proc.name;
+        if ((int)name.length() > cmdColW - 1) name = name.substr(0, cmdColW - 2) + L"~";
+
+        std::wstring user = proc.userName;
+        if (user.length() > 8) user = user.substr(0, 8);
 
         if (printedCount == 0) {
             SetColor(BG_CYAN_FG_BLACK);
-        }
-        else {
-            SetColor(FG_BRIGHT_CYAN); std::wcout << std::left << std::setw(pidColW) << (L"  " + std::to_wstring(proc.pid));
-            SetColor(WHITE); std::wcout << std::setw(nameColW) << name;
-            SetColor(FG_BRIGHT_GREEN); std::wcout << std::right << std::setw(memColW) << (std::to_wstring(proc.memoryUsage / (1024 * 1024)) + L" MB") << std::endl;
-            printedCount++;
-            continue;
+        } else {
+            SetColor(FG_BRIGHT_CYAN);
         }
 
-        // Малювання першого (виділеного) рядка
-        std::wcout << std::left << std::setw(pidColW) << (L"  " + std::to_wstring(proc.pid))
-            << std::setw(nameColW) << name
-            << std::right << std::setw(memColW) << (std::to_wstring(proc.memoryUsage / (1024 * 1024)) + L" MB") << std::endl;
-        SetColor(WHITE);
+        // PID
+        std::wcout << std::right << std::setw(6) << proc.pid << L" ";
+
+        // USER
+        if (printedCount != 0) SetColor(WHITE);
+        std::wcout << std::left << std::setw(9) << user;
+
+        // PRI
+        std::wcout << std::right << std::setw(3) << proc.priority << L" ";
+
+        // NI
+        std::wcout << std::right << std::setw(3) << proc.niceness << L" ";
+
+        // VIRT
+        std::wcout << std::right << std::setw(6) << formatMem(proc.virtualMemory) << L" ";
+
+        // RES
+        if (printedCount != 0) SetColor(FG_BRIGHT_GREEN);
+        std::wcout << std::right << std::setw(6) << formatMem(proc.memoryUsage) << L" ";
+
+        // SHR
+        if (printedCount != 0) SetColor(WHITE);
+        std::wcout << std::right << std::setw(6) << formatMem(proc.sharedMemory) << L" ";
+
+        // S (state)
+        std::wcout << proc.state << L" ";
+
+        // CPU%
+        if (printedCount != 0 && proc.cpuPercent > 5.0) SetColor(FG_BRIGHT_RED);
+        else if (printedCount != 0) SetColor(FG_BRIGHT_GREEN);
+        std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.cpuPercent;
+
+        // MEM%
+        if (printedCount != 0) SetColor(WHITE);
+        std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.memPercent << L" ";
+
+        // TIME+
+        std::wcout << std::right << std::setw(9) << formatTime(proc.cpuTime) << L" ";
+
+        // COMMAND
+        if (printedCount != 0) SetColor(WHITE);
+        std::wcout << std::left << std::setw(cmdColW) << name;
+
+        std::wcout << std::endl;
+        if (printedCount == 0) SetColor(WHITE);
         printedCount++;
     }
 
