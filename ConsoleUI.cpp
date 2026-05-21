@@ -336,8 +336,16 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon, ProcessMoni
     SetColor((DARKGRAY << 4) | WHITE); std::wcout << L" <->" ; SetColor((CYAN << 4) | BLACK); std::wcout << (config.lang == Language::Ukrainian ? L"Гортання " : L"Scroll   ");
 
     SetColor(WHITE);
-    // Заливаємо залишок рядка пробілами
     std::wcout << std::setw(termWidth - 65) << L" " << std::endl;
+
+    // Очищення залишку екрану під footer
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hOut, &csbi);
+    DWORD cellsToFill = (csbi.dwSize.X) * (csbi.dwSize.Y - csbi.dwCursorPosition.Y);
+    DWORD written;
+    FillConsoleOutputCharacterW(hOut, L' ', cellsToFill, csbi.dwCursorPosition, &written);
+    FillConsoleOutputAttribute(hOut, WHITE, cellsToFill, csbi.dwCursorPosition, &written);
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
