@@ -13,6 +13,14 @@ int main() {
 
     // main.cpp (всередині циклу while)
     while (true) {
+        // Обробка подій миші
+        if (ConsoleUI::ProcessMouseInput(config, cpuMon)) {
+            if (!config.showHelp) {
+                ConsoleUI::RenderMonitor(config, cpuMon);
+            }
+            continue;
+        }
+
         // [F1] або [H] - Довідка
         if ((GetAsyncKeyState(VK_F1) & 0x8000) || (GetAsyncKeyState('H') & 0x8000)) {
             config.showHelp = !config.showHelp;
@@ -31,22 +39,76 @@ int main() {
             else config.refreshInterval = 1000;
             Sleep(250);
         }
+        // [Tab] або [F3] - Перемикання вкладок
+        if ((GetAsyncKeyState(VK_TAB) & 0x8000) || (GetAsyncKeyState(VK_F3) & 0x8000)) {
+            config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
+            config.scrollOffset = 0;
+            config.selectedRow = 0;
+            system("cls");
+            Sleep(250);
+        }
 
-        // Гортання сторінок стрілками
+        // Навігація стрілками (htop-style: по одному рядку)
         if (!config.showHelp) {
             size_t totalProcesses = SystemManager::GetProcesses().size();
-            if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
-                if (config.pageOffset + 15 < (int)totalProcesses) {
-                    config.pageOffset += 15;
-                    ConsoleUI::RenderMonitor(config, cpuMon);
+
+            // Стрілка вниз
+            if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
+                if (config.selectedRow < (int)totalProcesses - 1) {
+                    config.selectedRow++;
+                    // Автоскрол якщо виділення вийшло за видиму область
+                    if (config.selectedRow >= config.scrollOffset + config.visibleRows) {
+                        config.scrollOffset = config.selectedRow - config.visibleRows + 1;
+                    }
                 }
+                ConsoleUI::RenderMonitor(config, cpuMon);
+                Sleep(80);
+            }
+            // Стрілка вгору
+            if (GetAsyncKeyState(VK_UP) & 0x8000) {
+                if (config.selectedRow > 0) {
+                    config.selectedRow--;
+                    // Автоскрол вгору
+                    if (config.selectedRow < config.scrollOffset) {
+                        config.scrollOffset = config.selectedRow;
+                    }
+                }
+                ConsoleUI::RenderMonitor(config, cpuMon);
+                Sleep(80);
+            }
+            // Page Down
+            if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
+                config.selectedRow += config.visibleRows;
+                if (config.selectedRow >= (int)totalProcesses) config.selectedRow = (int)totalProcesses - 1;
+                if (config.selectedRow >= config.scrollOffset + config.visibleRows) {
+                    config.scrollOffset = config.selectedRow - config.visibleRows + 1;
+                }
+                ConsoleUI::RenderMonitor(config, cpuMon);
                 Sleep(150);
             }
+            // Page Up
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
-                if (config.pageOffset - 15 >= 0) {
-                    config.pageOffset -= 15;
-                    ConsoleUI::RenderMonitor(config, cpuMon);
+                config.selectedRow -= config.visibleRows;
+                if (config.selectedRow < 0) config.selectedRow = 0;
+                if (config.selectedRow < config.scrollOffset) {
+                    config.scrollOffset = config.selectedRow;
                 }
+                ConsoleUI::RenderMonitor(config, cpuMon);
+                Sleep(150);
+            }
+            // Home
+            if (GetAsyncKeyState(VK_HOME) & 0x8000) {
+                config.selectedRow = 0;
+                config.scrollOffset = 0;
+                ConsoleUI::RenderMonitor(config, cpuMon);
+                Sleep(150);
+            }
+            // End
+            if (GetAsyncKeyState(VK_END) & 0x8000) {
+                config.selectedRow = (int)totalProcesses - 1;
+                config.scrollOffset = (int)totalProcesses - config.visibleRows;
+                if (config.scrollOffset < 0) config.scrollOffset = 0;
+                ConsoleUI::RenderMonitor(config, cpuMon);
                 Sleep(150);
             }
         }
