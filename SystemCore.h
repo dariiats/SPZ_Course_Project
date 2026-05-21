@@ -1,5 +1,12 @@
 // SystemCore.h
 #pragma once
+#ifndef SYSTEMCORE_H
+#define SYSTEMCORE_H
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include <windows.h>
 #include <vector>
 #include <string>
@@ -42,3 +49,5 @@ public:
     static std::vector<ProcessInfo> GetProcesses();
     static DWORD KillProcess(DWORD pid);
 };
+
+#endif // SYSTEMCORE_H
