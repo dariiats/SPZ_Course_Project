@@ -7,7 +7,16 @@
 struct ProcessInfo {
     DWORD pid;
     std::wstring name;
-    SIZE_T memoryUsage;
+    std::wstring userName;
+    SIZE_T memoryUsage;      // RES (Working Set)
+    SIZE_T virtualMemory;    // VIRT
+    SIZE_T sharedMemory;     // SHR
+    int priority;            // PRI
+    int niceness;            // NI
+    double cpuPercent;       // CPU%
+    double memPercent;       // MEM%
+    ULONGLONG cpuTime;       // TIME+ (in milliseconds)
+    wchar_t state;           // S (R/S/Z/T)
 };
 
 class CpuMonitor {

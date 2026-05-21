@@ -2,6 +2,44 @@
 #include "SystemCore.h"
 #include <tlhelp32.h>
 #include <psapi.h>
+#include <sddl.h>
+#include <string>
+
+#pragma comment(lib, "advapi32.lib")
+
+static std::wstring GetProcessUserName(HANDLE hProcess) {
+    HANDLE hToken = NULL;
+    if (!OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) return L"-";
+
+    DWORD dwSize = 0;
+    GetTokenInformation(hToken, TokenUser, NULL, 0, &dwSize);
+    if (dwSize == 0) { CloseHandle(hToken); return L"-"; }
+
+    std::vector<BYTE> buffer(dwSize);
+    PTOKEN_USER pTokenUser = reinterpret_cast<PTOKEN_USER>(buffer.data());
+    if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) {
+        CloseHandle(hToken);
+        return L"-";
+    }
+
+    wchar_t userName[256] = {}, domainName[256] = {};
+    DWORD userLen = 256, domainLen = 256;
+    SID_NAME_USE sidType;
+    if (!LookupAccountSidW(NULL, pTokenUser->User.Sid, userName, &userLen, domainName, &domainLen, &sidType)) {
+        CloseHandle(hToken);
+        return L"-";
+    }
+    CloseHandle(hToken);
+    return std::wstring(userName);
+}
+
+static wchar_t GetProcessState(HANDLE hProcess) {
+    DWORD exitCode = 0;
+    if (GetExitCodeProcess(hProcess, &exitCode)) {
+        if (exitCode == STILL_ACTIVE) return L'R';
+    }
+    return L'S';
+}
 
 ULONGLONG CpuMonitor::FileTimeToQuadWord(const FILETIME& ft) {
     return (static_cast<ULONGLONG>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;
@@ -52,16 +90,70 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE) return processList;
 
+    MEMORYSTATUSEX memStatus = { sizeof(MEMORYSTATUSEX) };
+    GlobalMemoryStatusEx(&memStatus);
+    double totalPhysMB = memStatus.ullTotalPhys / (1024.0 * 1024.0);
+
     PROCESSENTRY32W pe = { sizeof(PROCESSENTRY32W) };
     if (Process32FirstW(hSnapshot, &pe)) {
         do {
-            ProcessInfo info = { pe.th32ProcessID, pe.szExeFile, 0 };
+            ProcessInfo info = {};
+            info.pid = pe.th32ProcessID;
+            info.name = pe.szExeFile;
+            info.priority = 0;
+            info.niceness = 0;
+            info.virtualMemory = 0;
+            info.memoryUsage = 0;
+            info.sharedMemory = 0;
+            info.cpuPercent = 0.0;
+            info.memPercent = 0.0;
+            info.cpuTime = 0;
+            info.state = L'S';
+            info.userName = L"-";
+
             HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe.th32ProcessID);
             if (hProcess != NULL) {
-                PROCESS_MEMORY_COUNTERS pmc;
-                if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
-                    info.memoryUsage = pmc.WorkingSetSize;
+                // Memory info
+                PROCESS_MEMORY_COUNTERS_EX pmc = { sizeof(PROCESS_MEMORY_COUNTERS_EX) };
+                if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
+                    info.memoryUsage = pmc.WorkingSetSize;           // RES
+                    info.virtualMemory = pmc.PrivateUsage;           // VIRT (private bytes)
+                    // SHR approximation: WorkingSet - Private
+                    info.sharedMemory = (pmc.WorkingSetSize > pmc.PrivateUsage)
+                        ? (pmc.WorkingSetSize - pmc.PrivateUsage) : 0;
                 }
+
+                // Priority
+                info.priority = GetPriorityClass(hProcess);
+                // Map priority class to numeric value like htop
+                switch (info.priority) {
+                    case REALTIME_PRIORITY_CLASS: info.priority = -20; info.niceness = -20; break;
+                    case HIGH_PRIORITY_CLASS: info.priority = -10; info.niceness = -10; break;
+                    case ABOVE_NORMAL_PRIORITY_CLASS: info.priority = -5; info.niceness = -5; break;
+                    case NORMAL_PRIORITY_CLASS: info.priority = 20; info.niceness = 0; break;
+                    case BELOW_NORMAL_PRIORITY_CLASS: info.priority = 30; info.niceness = 10; break;
+                    case IDLE_PRIORITY_CLASS: info.priority = 39; info.niceness = 19; break;
+                    default: info.priority = 20; info.niceness = 0; break;
+                }
+
+                // CPU time
+                FILETIME createTime, exitTime, kernelTime, userTime;
+                if (GetProcessTimes(hProcess, &createTime, &exitTime, &kernelTime, &userTime)) {
+                    ULONGLONG kt = (static_cast<ULONGLONG>(kernelTime.dwHighDateTime) << 32) | kernelTime.dwLowDateTime;
+                    ULONGLONG ut = (static_cast<ULONGLONG>(userTime.dwHighDateTime) << 32) | userTime.dwLowDateTime;
+                    info.cpuTime = (kt + ut) / 10000; // Convert 100ns units to ms
+                }
+
+                // MEM%
+                double resMB = info.memoryUsage / (1024.0 * 1024.0);
+                info.memPercent = (totalPhysMB > 0) ? (resMB / totalPhysMB) * 100.0 : 0.0;
+
+                // State
+                info.state = GetProcessState(hProcess);
+
+                // User name
+                info.userName = GetProcessUserName(hProcess);
+
                 CloseHandle(hProcess);
             }
             processList.push_back(info);

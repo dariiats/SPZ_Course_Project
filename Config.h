@@ -21,7 +21,7 @@ public:
             if (key == "title") return L"=== СИСТЕМНИЙ МОНІТОР ===";
             if (key == "cpu") return L"Завантаження CPU: ";
             if (key == "ram") return L"Використання RAM: ";
-            if (key == "headers") return L"PID     Назва процесу                  Пам'ять (МБ)";
+            if (key == "headers") return L"PID     USER     PRI NI   VIRT    RES    SHR S CPU%  MEM%    TIME+ КОМАНДА";
             if (key == "footer") return L"[H] Довідка | [L] Мова (UA/EN) | [I] Інтервал | [K] Завершити PID";
             if (key == "access_denied") return L"Відмовлено в доступі!";
             if (key == "not_found") return L"Процес не знайдено!";
@@ -31,7 +31,7 @@ public:
             if (key == "title") return L"=== SYSTEM MONITOR ===";
             if (key == "cpu") return L"CPU Usage: ";
             if (key == "ram") return L"RAM Usage: ";
-            if (key == "headers") return L"PID     Process Name                   Memory (MB)";
+            if (key == "headers") return L"PID     USER     PRI NI   VIRT    RES    SHR S CPU%  MEM%    TIME+ COMMAND";
             if (key == "footer") return L"[H] Help | [L] Language (UA/EN) | [I] Interval | [K] Kill PID";
             if (key == "access_denied") return L"Access Denied!";
             if (key == "not_found") return L"Process Not Found!";
