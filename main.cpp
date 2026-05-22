@@ -1,93 +1,111 @@
 // main.cpp
 #include "ConsoleUI.h"
+#include <iostream>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <vector>
+#include <tlhelp32.h>
 
-int main() {
-    ConsoleUI::InitConsole();
-    SystemManager::EnableDebugPrivilege(); // Активація SeDebugPrivilege
+// === Глобальний стан для синхронізації між потоками ===
+std::mutex g_configMutex;       // Захист AppConfig
+std::mutex g_dataMutex;         // Захист кешованих даних процесів
+std::atomic<bool> g_needsCls{ false };
+std::atomic<bool> g_killRequested{ false };
+std::atomic<bool> g_running{ true };
 
-    CpuMonitor cpuMon;
-    AppConfig config;
+// Кешовані дані процесів (заповнюються Data Thread, читаються Render Thread)
+std::vector<ProcessInfo> g_cachedProcesses;
+int g_cachedThreadCount = 0;
 
-    cpuMon.GetCpuUsage();
-    Sleep(100);
-
-    // main.cpp (всередині циклу while)
-    while (true) {
+// ============================================================
+// ПОТІК 1: Input — обробка клавіатури (polling ~30ms)
+// ============================================================
+void InputThread(AppConfig& config) {
+    while (g_running) {
         // [F1] або [H] - Довідка
         if ((GetAsyncKeyState(VK_F1) & 0x8000) || (GetAsyncKeyState('H') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
             config.showHelp = !config.showHelp;
-            system("cls");
+            g_needsCls = true;
             Sleep(250);
         }
         // [F2] або [L] - Мова
         if ((GetAsyncKeyState(VK_F2) & 0x8000) || (GetAsyncKeyState('L') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
             config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
             Sleep(250);
         }
         // [F6] або [I] - Інтервал
         if ((GetAsyncKeyState(VK_F6) & 0x8000) || (GetAsyncKeyState('I') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
             if (config.refreshInterval == 1000) config.refreshInterval = 3000;
             else if (config.refreshInterval == 3000) config.refreshInterval = 5000;
             else config.refreshInterval = 1000;
             Sleep(250);
         }
-        // [Tab] - Перемикання вкладок Main/IO
+        // [Tab] - Перемикання вкладок
         if (GetAsyncKeyState(VK_TAB) & 0x8000) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
             config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
             config.pageOffset = 0;
-            system("cls");
+            config.selectedRow = 0;
+            g_needsCls = true;
             Sleep(250);
         }
 
-        // [F3] або [S] - Відкрити/закрити меню сортування
+        // [F3] або [S] - Меню сортування
         if ((GetAsyncKeyState(VK_F3) & 0x8000) || (GetAsyncKeyState('S') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
             config.showSortMenu = !config.showSortMenu;
-            if (config.showSortMenu) system("cls");
+            if (config.showSortMenu) g_needsCls = true;
             Sleep(250);
         }
 
         // Навігація в меню сортування
         if (config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.sortMenuIndex > 0) config.sortMenuIndex--;
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.sortMenuIndex < 11) config.sortMenuIndex++;
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
                 config.sortColumn = static_cast<SortColumn>(config.sortMenuIndex);
                 config.showSortMenu = false;
                 config.pageOffset = 0;
-                system("cls");
+                config.selectedRow = 0;
+                g_needsCls = true;
                 Sleep(250);
             }
             if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
                 config.showSortMenu = false;
-                system("cls");
+                g_needsCls = true;
                 Sleep(250);
             }
-            ConsoleUI::RenderSortMenu(config);
-            Sleep(50);
+            Sleep(30);
             continue;
         }
 
-        // [F4] або [R] - Інвертувати напрямок сортування
+        // [F4] або [R] - Інвертувати сортування
         if ((GetAsyncKeyState(VK_F4) & 0x8000) || (GetAsyncKeyState('R') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
             config.sortAscending = !config.sortAscending;
             config.pageOffset = 0;
+            config.selectedRow = 0;
             Sleep(250);
         }
 
-        // Гортання сторінок стрілками та виділення процесу
-        if (!config.showHelp) {
-            size_t totalProcesses = SystemManager::GetProcesses().size();
-            int pageSize = 15;
-            int maxOnPage = (std::min)(pageSize, (int)totalProcesses - config.pageOffset);
-
-            // Вгору/вниз — виділення рядка
+        // Стрілки — виділення та гортання
+        if (!config.showHelp && !config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.selectedRow > 0) {
                     config.selectedRow--;
                 } else if (config.pageOffset > 0) {
@@ -96,48 +114,141 @@ int main() {
                 Sleep(120);
             }
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
-                if (config.selectedRow < maxOnPage - 1) {
-                    config.selectedRow++;
-                } else if (config.pageOffset + pageSize < (int)totalProcesses) {
-                    config.pageOffset++;
-                }
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                config.selectedRow++;
                 Sleep(120);
             }
-
-            // Вліво/вправо — гортання сторінками
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
-                if (config.pageOffset + pageSize < (int)totalProcesses) {
-                    config.pageOffset += pageSize;
-                    config.selectedRow = 0;
-                    ConsoleUI::RenderMonitor(config, cpuMon);
-                }
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                config.pageOffset += 15;
+                config.selectedRow = 0;
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
-                if (config.pageOffset - pageSize >= 0) {
-                    config.pageOffset -= pageSize;
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                if (config.pageOffset >= 15) {
+                    config.pageOffset -= 15;
                     config.selectedRow = 0;
-                    ConsoleUI::RenderMonitor(config, cpuMon);
                 }
                 Sleep(150);
             }
         }
 
-        // Рендеринг екранів
-        if (config.showHelp) {
-            ConsoleUI::RenderHelp(config.lang);
-            Sleep(100);
+        // [F9] або [K] - Kill
+        if ((GetAsyncKeyState(VK_F9) & 0x8000) || (GetAsyncKeyState('K') & 0x8000)) {
+            g_killRequested = true;
+            Sleep(250);
+        }
+
+        Sleep(30);
+    }
+}
+
+// ============================================================
+// ПОТІК 2: Data Collector — збір даних процесів у фоні
+// ============================================================
+void DataThread(AppConfig& config) {
+    while (g_running) {
+        // Збір даних (найважча операція)
+        std::vector<ProcessInfo> freshProcesses = SystemManager::GetProcesses();
+
+        // Підрахунок потоків
+        int threadCount = 0;
+        HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (hThreadSnap != INVALID_HANDLE_VALUE) {
+            THREADENTRY32 te = { sizeof(THREADENTRY32) };
+            if (Thread32First(hThreadSnap, &te)) {
+                do { threadCount++; } while (Thread32Next(hThreadSnap, &te));
+            }
+            CloseHandle(hThreadSnap);
+        }
+
+        // Оновлення кешу під mutex
+        {
+            std::lock_guard<std::mutex> lock(g_dataMutex);
+            g_cachedProcesses = std::move(freshProcesses);
+            g_cachedThreadCount = threadCount;
+        }
+
+        // Спимо відповідно до інтервалу оновлення
+        int interval;
+        {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            interval = config.refreshInterval;
+        }
+        Sleep(interval);
+    }
+}
+
+// ============================================================
+// ПОТІК 3: Render — відображення UI
+// ============================================================
+void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
+    while (g_running) {
+        // Очищення екрану якщо потрібно
+        if (g_needsCls.exchange(false)) {
+            std::wcout << L"\x1b[2J\x1b[H";
+        }
+
+        // Kill-діалог (потребує stdin)
+        if (g_killRequested.exchange(false)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            ConsoleUI::HandleKillDialog(config, cpuMon);
             continue;
         }
 
-        ConsoleUI::RenderMonitor(config, cpuMon);
+        int interval;
+        {
+            std::lock_guard<std::mutex> lock(g_configMutex);
 
-        // [F9] або [K] - Завершити процес за PID
-        if ((GetAsyncKeyState(VK_F9) & 0x8000) || (GetAsyncKeyState('K') & 0x8000)) {
-            ConsoleUI::HandleKillDialog(config, cpuMon);
+            if (config.showSortMenu) {
+                ConsoleUI::RenderSortMenu(config);
+            } else if (config.showHelp) {
+                ConsoleUI::RenderHelp(config.lang);
+            } else {
+                ConsoleUI::RenderMonitor(config, cpuMon);
+            }
+            interval = config.refreshInterval;
         }
-
-        Sleep(config.refreshInterval);
+        // Mutex звільнений — InputThread може працювати під час sleep
+        Sleep(interval / 4); // Рендер ~250мс — достатньо плавно
     }
+}
+
+// ============================================================
+// MAIN — запуск потоків
+// ============================================================
+int main() {
+    ConsoleUI::InitConsole();
+    SystemManager::EnableDebugPrivilege();
+
+    CpuMonitor cpuMon;
+    AppConfig config;
+
+    cpuMon.GetCpuUsage();
+    Sleep(100);
+
+    // Перший збір даних перед запуском потоків
+    {
+        g_cachedProcesses = SystemManager::GetProcesses();
+        HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (hThreadSnap != INVALID_HANDLE_VALUE) {
+            THREADENTRY32 te = { sizeof(THREADENTRY32) };
+            if (Thread32First(hThreadSnap, &te)) {
+                do { g_cachedThreadCount++; } while (Thread32Next(hThreadSnap, &te));
+            }
+            CloseHandle(hThreadSnap);
+        }
+    }
+
+    // Запуск 3 потоків
+    std::thread input(InputThread, std::ref(config));
+    std::thread data(DataThread, std::ref(config));
+    std::thread render(RenderThread, std::ref(config), std::ref(cpuMon));
+
+    input.join();
+    data.join();
+    render.join();
+
     return 0;
 }
