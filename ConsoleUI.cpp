@@ -192,7 +192,9 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         << (overallCpu / 100.0) + 0.08 << L" " << (overallCpu / 100.0) + 0.02
         << VT_CLEAR_LINE << std::endl;
 
-    std::wcout << VT_FG_BRIGHT_CYAN << std::setw(51) << L" " << L"  Uptime: " << VT_RESET;
+    // Uptime вирівняний під Tasks/Load avg (позиція після DrawWideBar)
+    // DrawWideBar виводить ~52 символи, тому відступ = 52
+    std::wcout << std::setw(52) << L" " << VT_FG_BRIGHT_CYAN << L"Uptime: " << VT_RESET;
     if (days > 0) std::wcout << days << L" days, ";
     std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
         << std::setw(2) << mins << L":" << std::setw(2) << secs
