@@ -264,40 +264,64 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         int fixedIOWidth = 7 + 9 + 4 + 9 + 11 + 12 + 6 + 6;
         cmdColW = termWidth - fixedIOWidth;
         if (cmdColW < 15) cmdColW = 15;
+
+        // Маркер сортування IO
+        std::wstring ioPid = L"  PID", ioUser = L"USER", ioRW = L"DISK R/W",
+                     ioRead = L"DISK READ", ioWrite = L"DISK WRITE", ioCmd = L"Command";
+        const wchar_t ioArrow = config.sortAscending ? L'\x25B2' : L'\x25BC';
+        switch (config.ioSortColumn) {
+            case IoSortColumn::Pid:       ioPid = std::wstring(L" PID") + ioArrow; break;
+            case IoSortColumn::User:      ioUser = std::wstring(L"USER") + ioArrow; break;
+            case IoSortColumn::DiskRW:    ioRW = std::wstring(L"DISK") + ioArrow + L"R/W"; break;
+            case IoSortColumn::DiskRead:  ioRead = std::wstring(L"DISK") + ioArrow + L"READ"; break;
+            case IoSortColumn::DiskWrite: ioWrite = std::wstring(L"DISK") + ioArrow + L"WRITE"; break;
+            case IoSortColumn::Command:   ioCmd = ioArrow + std::wstring(L"Command"); break;
+            default: break;
+        }
+
         std::wcout << std::left
-            << std::setw(7) << L"  PID"
-            << std::setw(9) << L"USER"
+            << std::setw(7) << ioPid
+            << std::setw(9) << ioUser
             << std::setw(4) << L"IO"
-            << std::setw(9) << L"DISK R/W"
-            << std::setw(11) << L"DISK READ"
-            << std::setw(12) << L"DISK WRITE"
+            << std::setw(9) << ioRW
+            << std::setw(11) << ioRead
+            << std::setw(12) << ioWrite
             << std::setw(6) << L"SWPD%"
             << std::setw(6) << L"IOD%"
-            << std::setw(cmdColW) << L"Command"
+            << std::setw(cmdColW) << ioCmd
             << VT_CLEAR_LINE << std::endl;
     }
     std::wcout << VT_RESET;
 
     // === СОРТУВАННЯ ===
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
-        if (config.activeTab == TabView::IO)
-            return (a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite);
-
         bool result;
-        switch (config.sortColumn) {
-            case SortColumn::Pid:        result = a.pid > b.pid; break;
-            case SortColumn::User:       result = a.userName < b.userName; break;
-            case SortColumn::Priority:   result = a.priority < b.priority; break;
-            case SortColumn::Nice:       result = a.niceness < b.niceness; break;
-            case SortColumn::Virt:       result = a.virtualMemory > b.virtualMemory; break;
-            case SortColumn::Res:        result = a.memoryUsage > b.memoryUsage; break;
-            case SortColumn::Shr:        result = a.sharedMemory > b.sharedMemory; break;
-            case SortColumn::State:      result = a.state < b.state; break;
-            case SortColumn::CpuPercent: result = a.cpuPercent > b.cpuPercent; break;
-            case SortColumn::MemPercent: result = a.memPercent > b.memPercent; break;
-            case SortColumn::Time:       result = a.cpuTime > b.cpuTime; break;
-            case SortColumn::Command:    result = a.name < b.name; break;
-            default:                     result = a.memoryUsage > b.memoryUsage; break;
+        if (config.activeTab == TabView::IO) {
+            switch (config.ioSortColumn) {
+                case IoSortColumn::Pid:       result = a.pid > b.pid; break;
+                case IoSortColumn::User:      result = a.userName < b.userName; break;
+                case IoSortColumn::DiskRW:    result = (a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite); break;
+                case IoSortColumn::DiskRead:  result = a.ioDiskRead > b.ioDiskRead; break;
+                case IoSortColumn::DiskWrite: result = a.ioDiskWrite > b.ioDiskWrite; break;
+                case IoSortColumn::Command:   result = a.name < b.name; break;
+                default:                      result = (a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite); break;
+            }
+        } else {
+            switch (config.sortColumn) {
+                case SortColumn::Pid:        result = a.pid > b.pid; break;
+                case SortColumn::User:       result = a.userName < b.userName; break;
+                case SortColumn::Priority:   result = a.priority < b.priority; break;
+                case SortColumn::Nice:       result = a.niceness < b.niceness; break;
+                case SortColumn::Virt:       result = a.virtualMemory > b.virtualMemory; break;
+                case SortColumn::Res:        result = a.memoryUsage > b.memoryUsage; break;
+                case SortColumn::Shr:        result = a.sharedMemory > b.sharedMemory; break;
+                case SortColumn::State:      result = a.state < b.state; break;
+                case SortColumn::CpuPercent: result = a.cpuPercent > b.cpuPercent; break;
+                case SortColumn::MemPercent: result = a.memPercent > b.memPercent; break;
+                case SortColumn::Time:       result = a.cpuTime > b.cpuTime; break;
+                case SortColumn::Command:    result = a.name < b.name; break;
+                default:                     result = a.memoryUsage > b.memoryUsage; break;
+            }
         }
         return config.sortAscending ? !result : result;
     });
@@ -422,11 +446,23 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
     ResetCursor();
     int termWidth = GetConsoleWidth();
 
-    const std::wstring items[] = {
+    const std::wstring mainItems[] = {
         L"PID", L"USER", L"PRIORITY", L"NICE", L"M_VIRT", L"M_RESIDENT",
         L"M_SHARE", L"STATE", L"PERCENT_CPU", L"PERCENT_MEM", L"TIME", L"Command"
     };
-    const int itemCount = 12;
+    const std::wstring ioItems[] = {
+        L"PID", L"USER", L"IO_PRIORITY", L"DISK_R/W", L"DISK_READ", L"DISK_WRITE", L"Command"
+    };
+
+    const std::wstring* items;
+    int itemCount;
+    if (config.activeTab == TabView::IO) {
+        items = ioItems;
+        itemCount = 7;
+    } else {
+        items = mainItems;
+        itemCount = 12;
+    }
 
     // Заголовок
     std::wcout << VT_BG_GREEN << VT_FG_BLACK << L" Sort by"
@@ -454,7 +490,7 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
         << VT_BG_CYAN << VT_FG_BLACK << L"Sort  "
         << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Esc "
         << VT_BG_CYAN << VT_FG_BLACK << L"Cancel"
-        << VT_RESET << VT_CLEAR_LINE << std::endl;
+        << VT_RESET << VT_CLEAR_LINE << L"\x1b[J" << std::endl;
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {

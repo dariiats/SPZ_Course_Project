@@ -27,6 +27,16 @@ enum class SortColumn {
     Command
 };
 
+enum class IoSortColumn {
+    Pid,
+    User,
+    IoPriority,
+    DiskRW,
+    DiskRead,
+    DiskWrite,
+    Command
+};
+
 struct AppConfig {
     Language lang = Language::Ukrainian;
     int refreshInterval = 1000;
@@ -37,6 +47,7 @@ struct AppConfig {
     int selectedRow = 0; // виділений рядок у таблиці процесів
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
+    IoSortColumn ioSortColumn = IoSortColumn::DiskRW;
     bool sortAscending = false; // false = descending (default like htop)
 };
 
