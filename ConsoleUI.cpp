@@ -485,33 +485,36 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         if (user.length() > 8) user = user.substr(0, 8);
 
         bool isSelected = (printedCount == config.selectedRow);
+        bool isPinned = (config.pinnedPid != 0 && proc.pid == config.pinnedPid && !isSelected);
 
         if (isSelected) {
             config.selectedPid = proc.pid;
             std::wcout << VT_BG_CYAN << VT_FG_BLACK;
+        } else if (isPinned) {
+            std::wcout << VT_FG_YELLOW;
         } else {
             std::wcout << VT_FG_BRIGHT_CYAN;
         }
 
         std::wcout << std::right << std::setw(6) << proc.pid << L" ";
-        if (!isSelected) std::wcout << VT_RESET;
+        if (!isSelected && !isPinned) std::wcout << VT_RESET;
         std::wcout << std::left << std::setw(9) << user;
 
         if (config.activeTab == TabView::Main) {
             std::wcout << std::right << std::setw(3) << proc.priority << L" ";
             std::wcout << std::right << std::setw(3) << proc.niceness << L" ";
             std::wcout << std::right << std::setw(6) << formatMem(proc.virtualMemory) << L" ";
-            if (!isSelected) std::wcout << VT_FG_BRIGHT_GREEN;
+            if (!isSelected && !isPinned) std::wcout << VT_FG_BRIGHT_GREEN;
             std::wcout << std::right << std::setw(6) << formatMem(proc.memoryUsage) << L" ";
-            if (!isSelected) std::wcout << VT_RESET;
+            if (!isSelected && !isPinned) std::wcout << VT_RESET;
             std::wcout << std::right << std::setw(6) << formatMem(proc.sharedMemory) << L" ";
             std::wcout << proc.state << L" ";
-            if (!isSelected) {
+            if (!isSelected && !isPinned) {
                 if (proc.cpuPercent > 5.0) std::wcout << VT_FG_BRIGHT_RED;
                 else std::wcout << VT_FG_BRIGHT_GREEN;
             }
             std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.cpuPercent;
-            if (!isSelected) std::wcout << VT_RESET;
+            if (!isSelected && !isPinned) std::wcout << VT_RESET;
             std::wcout << std::right << std::fixed << std::setprecision(1) << std::setw(5) << proc.memPercent << L" ";
             std::wcout << std::right << std::setw(9) << formatTime(proc.cpuTime) << L" ";
         } else {
@@ -525,19 +528,19 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             };
 
             std::wcout << std::left << std::setw(3) << L"B7" << L" ";
-            if (!isSelected) std::wcout << VT_RESET;
+            if (!isSelected && !isPinned) std::wcout << VT_RESET;
             // DISK R/W = read + write rate
             std::wstring rw = formatIO(proc.ioDiskRead + proc.ioDiskWrite) + L"/s";
             std::wcout << std::right << std::setw(8) << rw << L" ";
             // DISK READ rate
-            if (!isSelected) std::wcout << VT_FG_BRIGHT_GREEN;
+            if (!isSelected && !isPinned) std::wcout << VT_FG_BRIGHT_GREEN;
             std::wstring dr = formatIO(proc.ioDiskRead) + L"/s";
             std::wcout << std::right << std::setw(10) << dr << L" ";
             // DISK WRITE rate
-            if (!isSelected) std::wcout << VT_FG_BRIGHT_RED;
+            if (!isSelected && !isPinned) std::wcout << VT_FG_BRIGHT_RED;
             std::wstring dw = formatIO(proc.ioDiskWrite) + L"/s";
             std::wcout << std::right << std::setw(11) << dw << L" ";
-            if (!isSelected) std::wcout << VT_RESET;
+            if (!isSelected && !isPinned) std::wcout << VT_RESET;
             // SWAPIN% та IO% — не доступні через WinAPI
             std::wcout << std::right << std::setw(5) << L"0.0" << L" ";
             std::wcout << std::right << std::setw(5) << L"0.0" << L" ";
