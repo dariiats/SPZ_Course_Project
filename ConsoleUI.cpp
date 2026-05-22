@@ -110,16 +110,29 @@ void ConsoleUI::RenderHelp(Language lang) {
     std::wcout << VT_FG_BRIGHT_CYAN
         << L"=== " << (lang == Language::Ukrainian ? L"ДОВІДКА" : L"HELP SYSTEM") << L" ==="
         << std::setw(w - 15) << L" " << std::endl;
-    std::wcout << VT_RESET
-        << L"  [F1]     - Close/open this help window\n"
-        << L"  [F2]     - Toggle language (UA / EN)\n"
-        << L"  [F3]     - Open sort menu (arrows + Enter/Esc)\n"
-        << L"  [F4]     - Toggle sort direction (Asc/Desc)\n"
-        << L"  [F6]     - Change refresh interval\n"
-        << L"  [F9]     - Kill process via PID\n"
-        << L"  [Tab]    - Switch tab (Main / IO)\n"
-        << L"  [Up/Down]  - Select process\n"
-        << L"  [<- / ->]  - Page scroll\n\n Press [F1] to return...";
+    if (lang == Language::Ukrainian) {
+        std::wcout << VT_RESET
+            << L"  [F1]       - Відкрити/закрити довідку\n"
+            << L"  [F2]       - Змінити мову (UA / EN)\n"
+            << L"  [F3]       - Меню сортування (стрілки + Enter/Esc)\n"
+            << L"  [F4]       - Змінити напрямок сортування\n"
+            << L"  [F6]       - Змінити інтервал оновлення\n"
+            << L"  [F9]       - Завершити процес за PID\n"
+            << L"  [Tab]      - Перемикання вкладок (Main / IO)\n"
+            << L"  [Вгору/Вниз] - Виділити процес\n"
+            << L"  [<- / ->]  - Гортання сторінок\n\n Натисніть [F1] щоб повернутись...";
+    } else {
+        std::wcout << VT_RESET
+            << L"  [F1]       - Close/open this help window\n"
+            << L"  [F2]       - Toggle language (UA / EN)\n"
+            << L"  [F3]       - Open sort menu (arrows + Enter/Esc)\n"
+            << L"  [F4]       - Toggle sort direction (Asc/Desc)\n"
+            << L"  [F6]       - Change refresh interval\n"
+            << L"  [F9]       - Kill process via PID\n"
+            << L"  [Tab]      - Switch tab (Main / IO)\n"
+            << L"  [Up/Down]  - Select process\n"
+            << L"  [<- / ->]  - Page scroll\n\n Press [F1] to return...";
+    }
     for (int i = 0; i < 18; i++) std::wcout << std::setw(w) << L" " << std::endl;
 }
 
@@ -185,17 +198,18 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     // РЯДКИ СТАТИСТИКИ
     DrawWideBar(L"Mem", usedMemG, totalMemG, VT_FG_BRIGHT_GREEN);
-    std::wcout << VT_FG_BRIGHT_CYAN << L"  Tasks: " << VT_RESET;
+    bool ua = (config.lang == Language::Ukrainian);
+    std::wcout << VT_FG_BRIGHT_CYAN << (ua ? L"  Задачі: " : L"  Tasks: ") << VT_RESET;
     int runningCount = 0;
     for (const auto& p : processes) {
         if (p.cpuPercent > 0.0) runningCount++;
     }
-    std::wcout << processes.size() << L", " << totalThreads << L" thr; "
-        << runningCount << L" running" << VT_CLEAR_LINE << std::endl;
+    std::wcout << processes.size() << L", " << totalThreads << (ua ? L" пот; " : L" thr; ")
+        << runningCount << (ua ? L" активн" : L" running") << VT_CLEAR_LINE << std::endl;
 
     DrawWideBar(L"Swp", usedPageG, totalPageG, VT_FG_BRIGHT_RED);
-    std::wcout << VT_FG_BRIGHT_CYAN << L"  Uptime: " << VT_RESET;
-    if (days > 0) std::wcout << days << L" days, ";
+    std::wcout << VT_FG_BRIGHT_CYAN << (ua ? L"  Час роботи: " : L"  Uptime: ") << VT_RESET;
+    if (days > 0) std::wcout << days << (ua ? L" дн, " : L" days, ");
     std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
         << std::setw(2) << mins << L":" << std::setw(2) << secs
         << std::setfill(L' ') << VT_CLEAR_LINE << std::endl;
@@ -267,7 +281,8 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
         // Маркер сортування IO
         std::wstring ioPid = L"  PID", ioUser = L"USER", ioRW = L"DISK R/W",
-                     ioRead = L"DISK READ", ioWrite = L"DISK WRITE", ioCmd = L"Command";
+                     ioRead = L"DISK READ", ioWrite = L"DISK WRITE",
+                     ioCmd = (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"Command");
         const wchar_t ioArrow = config.sortAscending ? L'\x25B2' : L'\x25BC';
         switch (config.ioSortColumn) {
             case IoSortColumn::Pid:       ioPid = std::wstring(L" PID") + ioArrow; break;
@@ -275,7 +290,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             case IoSortColumn::DiskRW:    ioRW = std::wstring(L"DISK") + ioArrow + L"R/W"; break;
             case IoSortColumn::DiskRead:  ioRead = std::wstring(L"DISK") + ioArrow + L"READ"; break;
             case IoSortColumn::DiskWrite: ioWrite = std::wstring(L"DISK") + ioArrow + L"WRITE"; break;
-            case IoSortColumn::Command:   ioCmd = ioArrow + std::wstring(L"Command"); break;
+            case IoSortColumn::Command:   ioCmd = ioArrow + (config.lang == Language::Ukrainian ? std::wstring(L"КОМАНДА") : std::wstring(L"Command")); break;
             default: break;
         }
 
@@ -435,7 +450,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"Asc " : L"Desc");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? (config.lang == Language::Ukrainian ? L"Зрост" : L"Asc ") : (config.lang == Language::Ukrainian ? L"Спад " : L"Desc"));
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
@@ -465,8 +480,9 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
     }
 
     // Заголовок
-    std::wcout << VT_BG_GREEN << VT_FG_BLACK << L" Sort by"
-        << std::setw(termWidth - 8) << L" " << VT_RESET << std::endl;
+    std::wcout << VT_BG_GREEN << VT_FG_BLACK
+        << (config.lang == Language::Ukrainian ? L" Сортувати за" : L" Sort by")
+        << std::setw(termWidth - 13) << L" " << VT_RESET << std::endl;
 
     for (int i = 0; i < itemCount; ++i) {
         if (i == config.sortMenuIndex) {
@@ -487,9 +503,9 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
     // Нижня панель
     std::wcout << VT_FG_DARKGRAY << std::wstring(termWidth, L'-') << std::endl;
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L"Enter"
-        << VT_BG_CYAN << VT_FG_BLACK << L"Sort  "
+        << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Обрати" : L"Sort  ")
         << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Esc "
-        << VT_BG_CYAN << VT_FG_BLACK << L"Cancel"
+        << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Назад " : L"Cancel")
         << VT_RESET << VT_CLEAR_LINE << L"\x1b[J" << std::endl;
 }
 
