@@ -68,7 +68,11 @@ void InputThread(AppConfig& config) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.showSearch = !config.showSearch;
                 config.showFilter = false;
-                if (!config.showSearch) {
+                if (config.showSearch) {
+                    // Зберігаємо позицію
+                    config.savedPageOffset = config.pageOffset;
+                    config.savedSelectedRow = config.selectedRow;
+                } else {
                     config.searchQuery.clear();
                 }
             }
@@ -85,21 +89,45 @@ void InputThread(AppConfig& config) {
                     // F3 = 0x00 + 0x3D(61) — наступний збіг
                     if (ext == 0x3D) {
                         std::lock_guard<std::mutex> lock(g_configMutex);
-                        // Перехід до наступного збігу
-                        config.selectedRow++;
+                        int cur = config.pageOffset + config.selectedRow;
+                        config.pageOffset = 0;
+                        config.selectedRow = cur + 1;
+                        config.searchNeedsJump = true;
                     }
                     continue;
                 }
-                if (ch == 27) { std::lock_guard<std::mutex> lock(g_configMutex); config.showSearch = false; break; }
-                if (ch == '\r' || ch == '\n') { std::lock_guard<std::mutex> lock(g_configMutex); config.showSearch = false; break; }
+                if (ch == 27) {
+                    // Esc — скасувати, повернути позицію
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.showSearch = false;
+                    config.searchQuery.clear();
+                    config.pageOffset = config.savedPageOffset;
+                    config.selectedRow = config.savedSelectedRow;
+                    break;
+                }
+                if (ch == '\r' || ch == '\n') {
+                    // Enter — підтвердити, залишити курсор на знайденому
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.showSearch = false;
+                    config.searchQuery.clear();
+                    break;
+                }
                 if (ch == '\b') {
                     std::lock_guard<std::mutex> lock(g_configMutex);
-                    if (!config.searchQuery.empty()) config.searchQuery.pop_back();
+                    if (!config.searchQuery.empty()) {
+                        config.searchQuery.pop_back();
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                        config.searchNeedsJump = true;
+                    }
                     continue;
                 }
                 if (ch >= 32 && ch < 127) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.searchQuery += static_cast<wchar_t>(towlower(ch));
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    config.searchNeedsJump = true;
                 }
             }
         }

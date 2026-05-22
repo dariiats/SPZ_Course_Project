@@ -44,10 +44,13 @@ struct AppConfig {
     bool showSortMenu = false;
     bool showSearch = false;       // F3 — Search (перехід до збігу)
     bool showFilter = false;       // F4 — Filter (фільтрація списку)
+    bool searchNeedsJump = false;  // Прапорець: потрібно перемістити курсор до збігу
     std::wstring searchQuery;      // Спільний текст для Search і Filter
     int sortMenuIndex = 5;
     int pageOffset = 0;
     int selectedRow = 0;
+    int savedPageOffset = 0;       // Збережена позиція перед Search
+    int savedSelectedRow = 0;      // Збережений виділений рядок перед Search
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
     IoSortColumn ioSortColumn = IoSortColumn::DiskRW;
