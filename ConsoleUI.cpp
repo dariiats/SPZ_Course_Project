@@ -217,16 +217,32 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         processes = std::move(filtered);
     }
 
-    // Search (F3) — знаходимо перший збіг і ставимо курсор
-    if (config.showSearch && !config.searchQuery.empty()) {
+    // Search (F3) — знаходимо збіг і ставимо курсор (тільки коли потрібно)
+    if (config.showSearch && config.searchNeedsJump && !config.searchQuery.empty()) {
+        config.searchNeedsJump = false;
         std::wstring query = config.searchQuery;
-        for (int i = 0; i < (int)processes.size(); ++i) {
+        int startFrom = config.pageOffset + config.selectedRow;
+        bool found = false;
+        for (int i = startFrom; i < (int)processes.size(); ++i) {
             std::wstring nameLower = processes[i].name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
             if (nameLower.find(query) != std::wstring::npos) {
                 config.pageOffset = (i / 15) * 15;
                 config.selectedRow = i - config.pageOffset;
+                found = true;
                 break;
+            }
+        }
+        // Якщо не знайдено від поточної позиції — шукаємо з початку
+        if (!found) {
+            for (int i = 0; i < startFrom && i < (int)processes.size(); ++i) {
+                std::wstring nameLower = processes[i].name;
+                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                if (nameLower.find(query) != std::wstring::npos) {
+                    config.pageOffset = (i / 15) * 15;
+                    config.selectedRow = i - config.pageOffset;
+                    break;
+                }
             }
         }
     }
