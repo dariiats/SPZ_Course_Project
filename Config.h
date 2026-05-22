@@ -1,6 +1,7 @@
 // Config.h
 #pragma once
 #include <string>
+#include <windows.h>
 
 enum class Language {
     Ukrainian,
@@ -52,6 +53,7 @@ struct AppConfig {
     int selectedRow = 0;
     int savedPageOffset = 0;       // Збережена позиція перед Search
     int savedSelectedRow = 0;      // Збережений виділений рядок перед Search
+    DWORD selectedPid = 0;         // PID виділеного процесу (оновлюється рендером)
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
     IoSortColumn ioSortColumn = IoSortColumn::DiskRW;

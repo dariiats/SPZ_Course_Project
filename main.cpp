@@ -38,14 +38,14 @@ void InputThread(AppConfig& config) {
             g_needsCls = true;
             Sleep(250);
         }
-        // [F2] - Мова
-        if (GetAsyncKeyState(VK_F2) & 0x8000) {
+        // [L] - Мова (тільки коли не в режимі вводу)
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('L') & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
             Sleep(250);
         }
-        // [F6] - Інтервал
-        if (GetAsyncKeyState(VK_F6) & 0x8000) {
+        // [I] - Інтервал (тільки коли не в режимі вводу)
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('I') & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             if (config.refreshInterval == 1000) config.refreshInterval = 3000;
             else if (config.refreshInterval == 3000) config.refreshInterval = 5000;
@@ -69,7 +69,6 @@ void InputThread(AppConfig& config) {
                 config.showSearch = !config.showSearch;
                 config.showFilter = false;
                 if (config.showSearch) {
-                    // Зберігаємо позицію
                     config.savedPageOffset = config.pageOffset;
                     config.savedSelectedRow = config.selectedRow;
                 } else {
@@ -94,7 +93,6 @@ void InputThread(AppConfig& config) {
                     continue;
                 }
                 if (ch == 27) {
-                    // Esc — скасувати, повернути позицію
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSearch = false;
                     config.searchQuery.clear();
@@ -104,7 +102,6 @@ void InputThread(AppConfig& config) {
                     break;
                 }
                 if (ch == '\r' || ch == '\n') {
-                    // Enter — підтвердити, залишити курсор на знайденому
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSearch = false;
                     config.searchQuery.clear();
@@ -171,8 +168,8 @@ void InputThread(AppConfig& config) {
             }
         }
 
-        // [F5] - Меню сортування
-        if (GetAsyncKeyState(VK_F5) & 0x8000) {
+        // [F2] - Меню сортування (Setup в htop)
+        if (GetAsyncKeyState(VK_F2) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showSortMenu = !config.showSortMenu;
             if (config.showSortMenu) {
@@ -219,13 +216,45 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F7] - Інвертувати сортування
-        if (GetAsyncKeyState(VK_F7) & 0x8000) {
+        // [F6] - Інвертувати сортування (SortBy в htop)
+        if (GetAsyncKeyState(VK_F6) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.sortAscending = !config.sortAscending;
             config.pageOffset = 0;
             config.selectedRow = 0;
             Sleep(250);
+        }
+
+        // [F7] - Nice- (підвищити пріоритет виділеного процесу)
+        if (GetAsyncKeyState(VK_F7) & 0x8000) {
+            DWORD targetPid = 0;
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                targetPid = config.selectedPid;
+            }
+            if (targetPid != 0) {
+                SystemManager::ChangeProcessPriority(targetPid, true);
+            }
+            Sleep(250);
+        }
+
+        // [F8] - Nice+ (знизити пріоритет виділеного процесу)
+        if (GetAsyncKeyState(VK_F8) & 0x8000) {
+            DWORD targetPid = 0;
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                targetPid = config.selectedPid;
+            }
+            if (targetPid != 0) {
+                SystemManager::ChangeProcessPriority(targetPid, false);
+            }
+            Sleep(250);
+        }
+
+        // [F10] - Quit (вихід)
+        if (GetAsyncKeyState(VK_F10) & 0x8000) {
+            g_running = false;
+            break;
         }
 
         // Введення тексту пошуку (не потрібно — обробляється вище)
@@ -404,6 +433,10 @@ int main() {
     input.join();
     data.join();
     render.join();
+
+    // Відновлення консолі при виході
+    std::wcout << L"\x1b[?1049l"; // Повернення з альтернативного буфера
+    std::wcout << L"\x1b[?25h";   // Показати курсор
 
     return 0;
 }

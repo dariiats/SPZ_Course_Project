@@ -124,14 +124,17 @@ void ConsoleUI::RenderHelp(Language lang) {
     if (lang == Language::Ukrainian) {
         std::wcout << VT_RESET
             << L"  [F1]       - Відкрити/закрити довідку\n"
-            << L"  [F2]       - Змінити мову (UA / EN)\n"
+            << L"  [F2]       - Меню сортування\n"
             << L"  [F3]       - Пошук процесу (перехід до збігу)\n"
             << L"  [F4]       - Фільтр (залишає лише збіги)\n"
-            << L"  [F5]       - Меню сортування\n"
-            << L"  [F6]       - Змінити інтервал оновлення\n"
-            << L"  [F7]       - Змінити напрямок сортування\n"
+            << L"  [F6]       - Змінити напрямок сортування\n"
+            << L"  [F7]       - Nice- (підвищити пріоритет)\n"
+            << L"  [F8]       - Nice+ (знизити пріоритет)\n"
             << L"  [F9]       - Завершити процес за PID\n"
+            << L"  [F10]      - Вихід\n"
             << L"  [Tab]      - Перемикання вкладок (Main / IO)\n"
+            << L"  [L]        - Змінити мову (UA / EN)\n"
+            << L"  [I]        - Змінити інтервал оновлення\n"
             << L"  [Вгору/Вниз] - Виділити процес\n"
             << L"  [<- / ->]  - Гортання сторінок\n"
             << L"  [Esc]      - Скасувати / закрити\n"
@@ -139,14 +142,17 @@ void ConsoleUI::RenderHelp(Language lang) {
     } else {
         std::wcout << VT_RESET
             << L"  [F1]       - Close/open this help window\n"
-            << L"  [F2]       - Toggle language (UA / EN)\n"
+            << L"  [F2]       - Sort menu\n"
             << L"  [F3]       - Search (jump to match)\n"
             << L"  [F4]       - Filter (show only matches)\n"
-            << L"  [F5]       - Sort menu\n"
-            << L"  [F6]       - Change refresh interval\n"
-            << L"  [F7]       - Toggle sort direction\n"
+            << L"  [F6]       - Toggle sort direction\n"
+            << L"  [F7]       - Nice- (raise priority)\n"
+            << L"  [F8]       - Nice+ (lower priority)\n"
             << L"  [F9]       - Kill process by PID\n"
+            << L"  [F10]      - Quit\n"
             << L"  [Tab]      - Switch tab (Main / IO)\n"
+            << L"  [L]        - Toggle language (UA / EN)\n"
+            << L"  [I]        - Change refresh interval\n"
             << L"  [Up/Down]  - Select process\n"
             << L"  [<- / ->]  - Page scroll\n"
             << L"  [Esc]      - Cancel / close\n"
@@ -481,6 +487,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         bool isSelected = (printedCount == config.selectedRow);
 
         if (isSelected) {
+            config.selectedPid = proc.pid;
             std::wcout << VT_BG_CYAN << VT_FG_BLACK;
         } else {
             std::wcout << VT_FG_BRIGHT_CYAN;
@@ -562,16 +569,21 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             << config.searchQuery << L"_"
             << VT_RESET << VT_CLEAR_LINE;
     } else {
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка" : L"Help  ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт " : L"SortBy");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пошук " : L"Search");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Фільтр" : L"Filter");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F5 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт  " : L"SortBy");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK
-            << (config.refreshInterval / 1000) << (config.lang == Language::Ukrainian ? L"с " : L"s ");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? (config.lang == Language::Ukrainian ? L"Зрост" : L"Asc ") : (config.lang == Language::Ukrainian ? L"Спад " : L"Desc"));
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"\x25B2" : L"\x25BC");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << L"Nice-";
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << L"Nice+";
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << L"Kill ";
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L"F10 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вихід" : L"Quit ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка" : L"Tab   ");
+        // Інфо справа: мова та інтервал
+        std::wcout << VT_RESET << VT_FG_DARKGRAY << L" [L]"
+            << VT_FG_BRIGHT_CYAN << (config.lang == Language::Ukrainian ? L"UA" : L"EN")
+            << VT_FG_DARKGRAY << L" [I]"
+            << VT_FG_BRIGHT_CYAN << (config.refreshInterval / 1000) << L"s";
         std::wcout << VT_RESET << VT_CLEAR_LINE;
     }
     std::wcout << L"\x1b[J";

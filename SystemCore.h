@@ -61,6 +61,7 @@ public:
     static bool EnableDebugPrivilege();
     static std::vector<ProcessInfo> GetProcesses();
     static DWORD KillProcess(DWORD pid);
+    static DWORD ChangeProcessPriority(DWORD pid, bool increase);
 
 private:
     // Зберігаємо попередні CPU-часи для обчислення per-process CPU%
