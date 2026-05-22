@@ -44,6 +44,7 @@ struct AppConfig {
     bool showSortMenu = false;
     bool showSearch = false;       // F3 — Search (перехід до збігу)
     bool showFilter = false;       // F4 — Filter (фільтрація списку)
+    bool searchNeedsJump = false;  // Прапорець: потрібно перемістити курсор до збігу
     std::wstring searchQuery;      // Спільний текст для Search і Filter
     int sortMenuIndex = 5;
     int pageOffset = 0;

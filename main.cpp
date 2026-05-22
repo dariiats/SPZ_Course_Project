@@ -85,8 +85,11 @@ void InputThread(AppConfig& config) {
                     // F3 = 0x00 + 0x3D(61) — наступний збіг
                     if (ext == 0x3D) {
                         std::lock_guard<std::mutex> lock(g_configMutex);
-                        // Перехід до наступного збігу
-                        config.selectedRow++;
+                        // +1 щоб шукати ПІСЛЯ поточного
+                        int cur = config.pageOffset + config.selectedRow;
+                        config.pageOffset = 0;
+                        config.selectedRow = cur + 1;
+                        config.searchNeedsJump = true;
                     }
                     continue;
                 }
@@ -94,12 +97,20 @@ void InputThread(AppConfig& config) {
                 if (ch == '\r' || ch == '\n') { std::lock_guard<std::mutex> lock(g_configMutex); config.showSearch = false; break; }
                 if (ch == '\b') {
                     std::lock_guard<std::mutex> lock(g_configMutex);
-                    if (!config.searchQuery.empty()) config.searchQuery.pop_back();
+                    if (!config.searchQuery.empty()) {
+                        config.searchQuery.pop_back();
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                        config.searchNeedsJump = true;
+                    }
                     continue;
                 }
                 if (ch >= 32 && ch < 127) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.searchQuery += static_cast<wchar_t>(towlower(ch));
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    config.searchNeedsJump = true;
                 }
             }
         }
