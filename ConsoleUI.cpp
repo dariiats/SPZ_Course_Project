@@ -224,50 +224,66 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         processes = std::move(filtered);
     }
 
-    // Search (F3) — знаходимо N-й збіг і ставимо курсор
+    // Search (F3) — тримаємо курсор на N-му збігу тільки коли query змінився
     bool searchFound = true;
-    if (config.showSearch && config.searchNeedsJump && !config.searchQuery.empty()) {
-        config.searchNeedsJump = false;
-        std::wstring query = config.searchQuery;
-        bool found = false;
-        int matchCount = 0;
+    static std::wstring lastSearchQuery;
+    static int lastSearchMatchIndex = -1;
 
-        for (int i = 0; i < (int)processes.size(); ++i) {
-            std::wstring nameLower = processes[i].name;
-            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) == 0) {
-                if (matchCount == config.searchMatchIndex) {
-                    config.pageOffset = (i / 15) * 15;
-                    config.selectedRow = i - config.pageOffset;
-                    found = true;
-                    break;
-                }
-                matchCount++;
-            }
-        }
-        // Якщо matchIndex за межами — wrap around до першого
-        if (!found && matchCount > 0) {
-            config.searchMatchIndex = 0;
+    if (config.showSearch && !config.searchQuery.empty()) {
+        // Оновлюємо позицію тільки коли запит або matchIndex змінились
+        if (config.searchQuery != lastSearchQuery || config.searchMatchIndex != lastSearchMatchIndex) {
+            lastSearchQuery = config.searchQuery;
+            lastSearchMatchIndex = config.searchMatchIndex;
+
+            std::wstring query = config.searchQuery;
+            bool found = false;
+            int matchCount = 0;
+
             for (int i = 0; i < (int)processes.size(); ++i) {
                 std::wstring nameLower = processes[i].name;
                 std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
                 if (nameLower.find(query) == 0) {
-                    config.pageOffset = (i / 15) * 15;
-                    config.selectedRow = i - config.pageOffset;
-                    found = true;
-                    break;
+                    if (matchCount == config.searchMatchIndex) {
+                        config.pageOffset = (i / 15) * 15;
+                        config.selectedRow = i - config.pageOffset;
+                        found = true;
+                        break;
+                    }
+                    matchCount++;
                 }
             }
+            // Wrap around
+            if (!found && matchCount > 0) {
+                config.searchMatchIndex = 0;
+                lastSearchMatchIndex = 0;
+                for (int i = 0; i < (int)processes.size(); ++i) {
+                    std::wstring nameLower = processes[i].name;
+                    std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                    if (nameLower.find(query) == 0) {
+                        config.pageOffset = (i / 15) * 15;
+                        config.selectedRow = i - config.pageOffset;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            searchFound = found;
+        } else {
+            // Query не змінився — просто перевіряємо чи є збіги для підсвітки
+            std::wstring query = config.searchQuery;
+            searchFound = false;
+            for (const auto& p : processes) {
+                std::wstring nameLower = p.name;
+                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                if (nameLower.find(query) == 0) { searchFound = true; break; }
+            }
         }
-        searchFound = found;
-    } else if (config.showSearch && !config.searchQuery.empty()) {
-        std::wstring query = config.searchQuery;
-        searchFound = false;
-        for (const auto& p : processes) {
-            std::wstring nameLower = p.name;
-            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) == 0) { searchFound = true; break; }
-        }
+    } else if (config.showSearch) {
+        searchFound = true;
+    } else {
+        // Search закритий — скидаємо стан
+        lastSearchQuery.clear();
+        lastSearchMatchIndex = -1;
     }
 
     // Для Filter — перевіряємо чи є результати
