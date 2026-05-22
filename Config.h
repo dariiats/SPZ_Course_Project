@@ -42,6 +42,8 @@ struct AppConfig {
     int refreshInterval = 1000;
     bool showHelp = false;
     bool showSortMenu = false;
+    bool showSearch = false;
+    std::wstring searchQuery;
     int sortMenuIndex = 5; // default = Res (index in menu list)
     int pageOffset = 0;
     int selectedRow = 0; // виділений рядок у таблиці процесів
