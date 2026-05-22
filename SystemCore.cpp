@@ -72,6 +72,96 @@ double CpuMonitor::GetCpuUsage() {
     return (cpuPercent < 0.0) ? 0.0 : (cpuPercent > 100.0) ? 100.0 : cpuPercent;
 }
 
+// === PerCoreCpuMonitor: реальне per-core навантаження ===
+// Використовує NtQuerySystemInformation з SystemProcessorPerformanceInformation
+
+typedef struct _SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION {
+    LARGE_INTEGER IdleTime;
+    LARGE_INTEGER KernelTime;
+    LARGE_INTEGER UserTime;
+    LARGE_INTEGER Reserved1[2];
+    ULONG Reserved2;
+} SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION;
+
+// SystemProcessorPerformanceInformation = 8
+typedef NTSTATUS(WINAPI* NtQuerySystemInformationFn)(
+    ULONG SystemInformationClass,
+    PVOID SystemInformation,
+    ULONG SystemInformationLength,
+    PULONG ReturnLength
+);
+
+static NtQuerySystemInformationFn g_NtQuerySystemInformation = nullptr;
+
+static bool InitNtQuery() {
+    if (g_NtQuerySystemInformation) return true;
+    HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
+    if (!hNtdll) return false;
+    g_NtQuerySystemInformation = (NtQuerySystemInformationFn)GetProcAddress(hNtdll, "NtQuerySystemInformation");
+    return g_NtQuerySystemInformation != nullptr;
+}
+
+PerCoreCpuMonitor::PerCoreCpuMonitor() {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    coreCount_ = si.dwNumberOfProcessors;
+    prevTimes_.resize(coreCount_);
+    coreUsages_.resize(coreCount_, 0.0);
+    Update(); // Перший знімок
+}
+
+void PerCoreCpuMonitor::Update() {
+    if (!InitNtQuery()) return;
+
+    std::vector<SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION> info(coreCount_);
+    ULONG returnLength = 0;
+    NTSTATUS status = g_NtQuerySystemInformation(
+        8, // SystemProcessorPerformanceInformation
+        info.data(),
+        static_cast<ULONG>(sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * coreCount_),
+        &returnLength
+    );
+
+    if (status != 0) return; // STATUS_SUCCESS = 0
+
+    for (int i = 0; i < coreCount_; ++i) {
+        ULONGLONG idle = info[i].IdleTime.QuadPart;
+        ULONGLONG kernel = info[i].KernelTime.QuadPart;
+        ULONGLONG user = info[i].UserTime.QuadPart;
+
+        ULONGLONG diffIdle = idle - prevTimes_[i].idle;
+        ULONGLONG diffKernel = kernel - prevTimes_[i].kernel;
+        ULONGLONG diffUser = user - prevTimes_[i].user;
+        ULONGLONG diffTotal = diffKernel + diffUser;
+
+        if (diffTotal > 0) {
+            double usage = (1.0 - static_cast<double>(diffIdle) / static_cast<double>(diffTotal)) * 100.0;
+            if (usage < 0.0) usage = 0.0;
+            if (usage > 100.0) usage = 100.0;
+            coreUsages_[i] = usage;
+        } else {
+            coreUsages_[i] = 0.0;
+        }
+
+        prevTimes_[i].idle = idle;
+        prevTimes_[i].kernel = kernel;
+        prevTimes_[i].user = user;
+    }
+}
+
+int PerCoreCpuMonitor::GetCoreCount() const {
+    return coreCount_;
+}
+
+double PerCoreCpuMonitor::GetCoreUsage(int coreIdx) const {
+    if (coreIdx < 0 || coreIdx >= coreCount_) return 0.0;
+    return coreUsages_[coreIdx];
+}
+
+const std::vector<double>& PerCoreCpuMonitor::GetAllCoreUsages() const {
+    return coreUsages_;
+}
+
 bool SystemManager::EnableDebugPrivilege() {
     HANDLE hToken;
     LUID luid;
@@ -169,10 +259,10 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                         auto it = prevCpuMap_.find(pe.th32ProcessID);
                         if (it != prevCpuMap_.end()) {
                             ULONGLONG procDelta = (kt + ut) - (it->second.kernelTime + it->second.userTime);
-                            // Нормалізуємо на кількість ядер (systemTimeDelta вже сумарний по всіх ядрах)
-                            info.cpuPercent = (static_cast<double>(procDelta) / static_cast<double>(systemTimeDelta)) * 100.0 * numCores;
+                            // CPU% нормалізований до 0-100% (systemTimeDelta вже сумарний по всіх ядрах)
+                            info.cpuPercent = (static_cast<double>(procDelta) / static_cast<double>(systemTimeDelta)) * 100.0;
                             if (info.cpuPercent < 0.0) info.cpuPercent = 0.0;
-                            if (info.cpuPercent > 100.0 * numCores) info.cpuPercent = 100.0 * numCores;
+                            if (info.cpuPercent > 100.0) info.cpuPercent = 100.0;
                         }
                     }
 

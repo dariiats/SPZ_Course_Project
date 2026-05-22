@@ -36,6 +36,26 @@ public:
     double GetCpuUsage();
 };
 
+// Per-core CPU моніторинг через NtQuerySystemInformation
+class PerCoreCpuMonitor {
+public:
+    PerCoreCpuMonitor();
+    void Update();                          // Оновити дані (викликати з інтервалом)
+    int GetCoreCount() const;
+    double GetCoreUsage(int coreIdx) const; // Повертає % для конкретного ядра
+    const std::vector<double>& GetAllCoreUsages() const;
+
+private:
+    struct CoreTimes {
+        ULONGLONG idle = 0;
+        ULONGLONG kernel = 0;
+        ULONGLONG user = 0;
+    };
+    int coreCount_ = 0;
+    std::vector<CoreTimes> prevTimes_;
+    std::vector<double> coreUsages_;
+};
+
 class SystemManager {
 public:
     static bool EnableDebugPrivilege();
