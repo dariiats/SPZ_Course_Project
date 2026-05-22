@@ -90,7 +90,6 @@ void InputThread(AppConfig& config) {
                     if (ext == 0x3D) {
                         std::lock_guard<std::mutex> lock(g_configMutex);
                         config.searchMatchIndex++;
-                        config.searchNeedsJump = true;
                     }
                     continue;
                 }
@@ -99,6 +98,7 @@ void InputThread(AppConfig& config) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSearch = false;
                     config.searchQuery.clear();
+                    config.searchMatchIndex = 0;
                     config.pageOffset = config.savedPageOffset;
                     config.selectedRow = config.savedSelectedRow;
                     break;
@@ -108,6 +108,7 @@ void InputThread(AppConfig& config) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSearch = false;
                     config.searchQuery.clear();
+                    config.searchMatchIndex = 0;
                     break;
                 }
                 if (ch == '\b') {
@@ -115,9 +116,6 @@ void InputThread(AppConfig& config) {
                     if (!config.searchQuery.empty()) {
                         config.searchQuery.pop_back();
                         config.searchMatchIndex = 0;
-                        config.pageOffset = 0;
-                        config.selectedRow = 0;
-                        config.searchNeedsJump = true;
                     }
                     continue;
                 }
@@ -125,9 +123,6 @@ void InputThread(AppConfig& config) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.searchQuery += static_cast<wchar_t>(towlower(ch));
                     config.searchMatchIndex = 0;
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                    config.searchNeedsJump = true;
                 }
             }
         }
