@@ -224,46 +224,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         processes = std::move(filtered);
     }
 
-    // Search (F3) — завжди тримаємо курсор на N-му збігу (як у фільтрі)
-    bool searchFound = true;
-
-    if (config.showSearch && !config.searchQuery.empty()) {
-        std::wstring query = config.searchQuery;
-        bool found = false;
-        int matchCount = 0;
-
-        for (int i = 0; i < (int)processes.size(); ++i) {
-            std::wstring nameLower = processes[i].name;
-            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) == 0) {
-                if (matchCount == config.searchMatchIndex) {
-                    config.pageOffset = (i / 15) * 15;
-                    config.selectedRow = i - config.pageOffset;
-                    found = true;
-                    break;
-                }
-                matchCount++;
-            }
-        }
-        // Wrap around — якщо matchIndex вийшов за межі, скидаємо на перший збіг
-        if (!found && matchCount > 0) {
-            config.searchMatchIndex = 0;
-            for (int i = 0; i < (int)processes.size(); ++i) {
-                std::wstring nameLower = processes[i].name;
-                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-                if (nameLower.find(query) == 0) {
-                    config.pageOffset = (i / 15) * 15;
-                    config.selectedRow = i - config.pageOffset;
-                    found = true;
-                    break;
-                }
-            }
-        }
-        searchFound = found;
-    } else if (config.showSearch) {
-        searchFound = true;
-    }
-
     // Для Filter — перевіряємо чи є результати
     bool filterHasResults = true;
     if (config.showFilter && !config.searchQuery.empty() && processes.empty()) {
@@ -443,6 +403,46 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         if (cmp == 0) return false; // рівні елементи — strict weak ordering
         return config.sortAscending ? (cmp < 0) : (cmp > 0);
     });
+
+    // Search (F3) — завжди тримаємо курсор на N-му збігу (після сортування)
+    bool searchFound = true;
+
+    if (config.showSearch && !config.searchQuery.empty()) {
+        std::wstring query = config.searchQuery;
+        bool found = false;
+        int matchCount = 0;
+
+        for (int i = 0; i < (int)processes.size(); ++i) {
+            std::wstring nameLower = processes[i].name;
+            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+            if (nameLower.find(query) == 0) {
+                if (matchCount == config.searchMatchIndex) {
+                    config.pageOffset = (i / 15) * 15;
+                    config.selectedRow = i - config.pageOffset;
+                    found = true;
+                    break;
+                }
+                matchCount++;
+            }
+        }
+        // Wrap around — якщо matchIndex вийшов за межі, скидаємо на перший збіг
+        if (!found && matchCount > 0) {
+            config.searchMatchIndex = 0;
+            for (int i = 0; i < (int)processes.size(); ++i) {
+                std::wstring nameLower = processes[i].name;
+                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                if (nameLower.find(query) == 0) {
+                    config.pageOffset = (i / 15) * 15;
+                    config.selectedRow = i - config.pageOffset;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        searchFound = found;
+    } else if (config.showSearch) {
+        searchFound = true;
+    }
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
     if (config.selectedRow >= (std::min)(15, (int)processes.size() - config.pageOffset))
