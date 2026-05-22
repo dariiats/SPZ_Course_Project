@@ -210,7 +210,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         for (const auto& p : processes) {
             std::wstring nameLower = p.name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) != std::wstring::npos) {
+            if (nameLower.find(query) == 0) {
                 filtered.push_back(p);
             }
         }
@@ -229,7 +229,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         for (int i = startFrom; i < (int)processes.size(); ++i) {
             std::wstring nameLower = processes[i].name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) != std::wstring::npos) {
+            if (nameLower.find(query) == 0) {
                 config.pageOffset = (i / 15) * 15;
                 config.selectedRow = i - config.pageOffset;
                 found = true;
@@ -241,7 +241,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             for (int i = 0; i < startFrom && i < (int)processes.size(); ++i) {
                 std::wstring nameLower = processes[i].name;
                 std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-                if (nameLower.find(query) != std::wstring::npos) {
+                if (nameLower.find(query) == 0) {
                     config.pageOffset = (i / 15) * 15;
                     config.selectedRow = i - config.pageOffset;
                     found = true;
@@ -257,7 +257,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         for (const auto& p : processes) {
             std::wstring nameLower = p.name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) != std::wstring::npos) { searchFound = true; break; }
+            if (nameLower.find(query) == 0) { searchFound = true; break; }
         }
     }
 

@@ -49,6 +49,8 @@ struct AppConfig {
     int sortMenuIndex = 5;
     int pageOffset = 0;
     int selectedRow = 0;
+    int savedPageOffset = 0;       // Збережена позиція перед Search
+    int savedSelectedRow = 0;      // Збережений виділений рядок перед Search
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
     IoSortColumn ioSortColumn = IoSortColumn::DiskRW;
