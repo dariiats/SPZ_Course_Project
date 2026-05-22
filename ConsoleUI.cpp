@@ -475,7 +475,8 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? (config.lang == Language::Ukrainian ? L"Зрост" : L"Asc ") : (config.lang == Language::Ukrainian ? L"Спад " : L"Desc"));
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
+    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK
+        << (config.refreshInterval / 1000) << (config.lang == Language::Ukrainian ? L"с " : L"s ");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
     std::wcout << VT_RESET << VT_CLEAR_LINE << L"\x1b[J" << std::endl;
 }
