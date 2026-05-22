@@ -57,10 +57,17 @@ void ConsoleUI::InitConsole() {
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
     SetConsoleMode(hOut, dwMode);
 
-    // Альтернативний screen buffer (як htop) — не засмічує основний буфер
+    // Альтернативний screen buffer (як htop)
     std::wcout << L"\x1b[?1049h";
     std::wcout << VT_CURSOR_HIDE;
     std::wcout << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+
+    // Вимикаємо обробку вводу консоллю щоб _kbhit/_getch працювали коректно
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD inMode = 0;
+    GetConsoleMode(hIn, &inMode);
+    inMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    SetConsoleMode(hIn, inMode);
 }
 
 void ConsoleUI::ResetCursor() {
@@ -217,28 +224,31 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         processes = std::move(filtered);
     }
 
-    // Search (F3) — знаходимо збіг і ставимо курсор (тільки коли потрібно)
+    // Search (F3) — знаходимо N-й збіг і ставимо курсор
     bool searchFound = true;
     if (config.showSearch && config.searchNeedsJump && !config.searchQuery.empty()) {
         config.searchNeedsJump = false;
         std::wstring query = config.searchQuery;
-        int startFrom = config.pageOffset + config.selectedRow;
         bool found = false;
+        int matchCount = 0;
 
-        // Шукаємо від поточної позиції до кінця
-        for (int i = startFrom; i < (int)processes.size(); ++i) {
+        for (int i = 0; i < (int)processes.size(); ++i) {
             std::wstring nameLower = processes[i].name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
             if (nameLower.find(query) == 0) {
-                config.pageOffset = (i / 15) * 15;
-                config.selectedRow = i - config.pageOffset;
-                found = true;
-                break;
+                if (matchCount == config.searchMatchIndex) {
+                    config.pageOffset = (i / 15) * 15;
+                    config.selectedRow = i - config.pageOffset;
+                    found = true;
+                    break;
+                }
+                matchCount++;
             }
         }
-        // Wrap around — шукаємо з початку
-        if (!found) {
-            for (int i = 0; i < startFrom && i < (int)processes.size(); ++i) {
+        // Якщо matchIndex за межами — wrap around до першого
+        if (!found && matchCount > 0) {
+            config.searchMatchIndex = 0;
+            for (int i = 0; i < (int)processes.size(); ++i) {
                 std::wstring nameLower = processes[i].name;
                 std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
                 if (nameLower.find(query) == 0) {
@@ -251,7 +261,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         }
         searchFound = found;
     } else if (config.showSearch && !config.searchQuery.empty()) {
-        // Перевіряємо чи поточний запит взагалі має збіги (для підсвітки)
         std::wstring query = config.searchQuery;
         searchFound = false;
         for (const auto& p : processes) {

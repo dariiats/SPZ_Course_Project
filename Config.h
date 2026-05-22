@@ -45,6 +45,7 @@ struct AppConfig {
     bool showSearch = false;       // F3 — Search (перехід до збігу)
     bool showFilter = false;       // F4 — Filter (фільтрація списку)
     bool searchNeedsJump = false;  // Прапорець: потрібно перемістити курсор до збігу
+    int searchMatchIndex = 0;      // Який збіг по порядку показувати (для F3 next)
     std::wstring searchQuery;      // Спільний текст для Search і Filter
     int sortMenuIndex = 5;
     int pageOffset = 0;
@@ -54,7 +55,7 @@ struct AppConfig {
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
     IoSortColumn ioSortColumn = IoSortColumn::DiskRW;
-    bool sortAscending = false; // false = descending (default like htop)
+    bool sortAscending = false;
 };
 
 class LocalizationManager {
