@@ -54,7 +54,7 @@ void ConsoleUI::InitConsole() {
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD dwMode = 0;
     GetConsoleMode(hOut, &dwMode);
-    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
     SetConsoleMode(hOut, dwMode);
 
     // Альтернативний screen buffer (як htop)
@@ -252,11 +252,39 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 std::wstring nameLower = processes[i].name;
                 std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
                 if (nameLower.find(query) == 0) {
-                    config.pageOffset = (i / 15) * 15;
-                    config.selectedRow = i - config.pageOffset;
-                    found = true;
-                    break;
+                    if (matchCount == config.searchMatchIndex) {
+                        config.pageOffset = (i / 15) * 15;
+                        config.selectedRow = i - config.pageOffset;
+                        found = true;
+                        break;
+                    }
+                    matchCount++;
                 }
+            }
+            // Wrap around
+            if (!found && matchCount > 0) {
+                config.searchMatchIndex = 0;
+                lastSearchMatchIndex = 0;
+                for (int i = 0; i < (int)processes.size(); ++i) {
+                    std::wstring nameLower = processes[i].name;
+                    std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                    if (nameLower.find(query) == 0) {
+                        config.pageOffset = (i / 15) * 15;
+                        config.selectedRow = i - config.pageOffset;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            searchFound = found;
+        } else {
+            // Query не змінився — просто перевіряємо чи є збіги для підсвітки
+            std::wstring query = config.searchQuery;
+            searchFound = false;
+            for (const auto& p : processes) {
+                std::wstring nameLower = p.name;
+                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                if (nameLower.find(query) == 0) { searchFound = true; break; }
             }
         }
         searchFound = found;
