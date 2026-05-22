@@ -122,56 +122,66 @@ void InputThread(AppConfig& config) {
 
         // [F5] - Пошук
         if (GetAsyncKeyState(VK_F5) & 0x8000) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            config.showSearch = !config.showSearch;
-            if (!config.showSearch) {
-                config.searchQuery.clear();
-                config.pageOffset = 0;
-                config.selectedRow = 0;
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                config.showSearch = !config.showSearch;
+                if (!config.showSearch) {
+                    config.searchQuery.clear();
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                }
             }
             Sleep(250);
+
+            // Якщо пошук активний — переходимо в режим прямого вводу
+            while (config.showSearch && g_running) {
+                if (_kbhit()) {
+                    int ch = _getch();
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+
+                    if (ch == 27) { // Esc
+                        config.showSearch = false;
+                        config.searchQuery.clear();
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                        break;
+                    }
+                    if (ch == 0 || ch == 0xE0) { // F-key prefix
+                        int ext = _getch();
+                        if (ext == 63) { // F5 scan code
+                            config.showSearch = false;
+                            config.searchQuery.clear();
+                            config.pageOffset = 0;
+                            config.selectedRow = 0;
+                            break;
+                        }
+                        continue;
+                    }
+                    if (ch == '\b' || ch == 127) { // Backspace
+                        if (!config.searchQuery.empty()) {
+                            config.searchQuery.pop_back();
+                            config.pageOffset = 0;
+                            config.selectedRow = 0;
+                        }
+                        continue;
+                    }
+                    if (ch == '\r' || ch == '\n') { // Enter — закрити пошук, залишити фільтр
+                        config.showSearch = false;
+                        break;
+                    }
+                    // Літери, цифри, крапка, дефіс, підкреслення
+                    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                        (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == '_') {
+                        config.searchQuery += static_cast<wchar_t>(towlower(ch));
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                    }
+                }
+                Sleep(15); // Мінімальний sleep для CPU
+            }
         }
 
-        // Введення тексту пошуку
-        if (config.showSearch && !config.showSortMenu && !config.showHelp) {
-            for (int key = 'A'; key <= 'Z'; ++key) {
-                if (GetAsyncKeyState(key) & 0x8000) {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.searchQuery += static_cast<wchar_t>(key + 32); // lowercase
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                    Sleep(150);
-                }
-            }
-            for (int key = '0'; key <= '9'; ++key) {
-                if (GetAsyncKeyState(key) & 0x8000) {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.searchQuery += static_cast<wchar_t>(key);
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                    Sleep(150);
-                }
-            }
-            // Backspace
-            if (GetAsyncKeyState(VK_BACK) & 0x8000) {
-                std::lock_guard<std::mutex> lock(g_configMutex);
-                if (!config.searchQuery.empty()) {
-                    config.searchQuery.pop_back();
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                }
-                Sleep(150);
-            }
-            // Esc — закрити пошук
-            if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
-                std::lock_guard<std::mutex> lock(g_configMutex);
-                config.showSearch = false;
-                config.searchQuery.clear();
-                config.pageOffset = 0;
-                config.selectedRow = 0;
-                Sleep(250);
-            }
-        }
+        // Введення тексту пошуку (не потрібно — обробляється вище)
 
         // Стрілки — виділення та гортання
         if (!config.showHelp && !config.showSortMenu) {
