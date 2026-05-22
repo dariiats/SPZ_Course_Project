@@ -71,4 +71,11 @@ private:
     };
     static std::unordered_map<DWORD, PrevCpuData> prevCpuMap_;
     static ULONGLONG prevSystemTime_;
+
+    // Зберігаємо попередні IO-лічильники для обчислення rate
+    struct PrevIoData {
+        ULONGLONG readBytes = 0;
+        ULONGLONG writeBytes = 0;
+    };
+    static std::unordered_map<DWORD, PrevIoData> prevIoMap_;
 };
