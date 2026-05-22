@@ -120,6 +120,105 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
+        // [F5] - Пошук
+        if (GetAsyncKeyState(VK_F5) & 0x8000) {
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                config.showSearch = !config.showSearch;
+                if (!config.showSearch) {
+                    config.searchQuery.clear();
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                }
+            }
+            // Чекаємо поки F5 відпуститься
+            while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(10);
+            // Очищуємо буфер консолі
+            FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
+            Sleep(100);
+
+            // Якщо пошук активний — режим прямого вводу
+            while (config.showSearch && g_running) {
+                // Перевіряємо Esc
+                if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.showSearch = false;
+                    config.searchQuery.clear();
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    Sleep(200);
+                    break;
+                }
+                // Enter — закрити пошук, залишити фільтр
+                if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.showSearch = false;
+                    Sleep(200);
+                    break;
+                }
+                // F5 — закрити пошук
+                if (GetAsyncKeyState(VK_F5) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.showSearch = false;
+                    config.searchQuery.clear();
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    Sleep(200);
+                    break;
+                }
+                // Backspace
+                if (GetAsyncKeyState(VK_BACK) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    if (!config.searchQuery.empty()) {
+                        config.searchQuery.pop_back();
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                    }
+                    Sleep(120);
+                    continue;
+                }
+                // Літери A-Z
+                bool found = false;
+                for (int key = 'A'; key <= 'Z'; ++key) {
+                    if (GetAsyncKeyState(key) & 0x8000) {
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        config.searchQuery += static_cast<wchar_t>(key + 32);
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                        found = true;
+                        Sleep(120);
+                        break;
+                    }
+                }
+                if (found) continue;
+                // Цифри 0-9
+                for (int key = '0'; key <= '9'; ++key) {
+                    if (GetAsyncKeyState(key) & 0x8000) {
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        config.searchQuery += static_cast<wchar_t>(key);
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                        found = true;
+                        Sleep(120);
+                        break;
+                    }
+                }
+                if (found) continue;
+                // Крапка
+                if (GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.searchQuery += L'.';
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    Sleep(120);
+                    continue;
+                }
+                Sleep(20);
+            }
+        }
+
+        // Введення тексту пошуку (не потрібно — обробляється вище)
+
         // Стрілки — виділення та гортання
         if (!config.showHelp && !config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
