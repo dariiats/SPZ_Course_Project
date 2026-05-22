@@ -218,11 +218,14 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     }
 
     // Search (F3) — знаходимо збіг і ставимо курсор (тільки коли потрібно)
+    bool searchFound = true;
     if (config.showSearch && config.searchNeedsJump && !config.searchQuery.empty()) {
         config.searchNeedsJump = false;
         std::wstring query = config.searchQuery;
         int startFrom = config.pageOffset + config.selectedRow;
         bool found = false;
+
+        // Шукаємо від поточної позиції до кінця
         for (int i = startFrom; i < (int)processes.size(); ++i) {
             std::wstring nameLower = processes[i].name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
@@ -233,7 +236,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 break;
             }
         }
-        // Якщо не знайдено від поточної позиції — шукаємо з початку
+        // Wrap around — шукаємо з початку
         if (!found) {
             for (int i = 0; i < startFrom && i < (int)processes.size(); ++i) {
                 std::wstring nameLower = processes[i].name;
@@ -241,10 +244,27 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 if (nameLower.find(query) != std::wstring::npos) {
                     config.pageOffset = (i / 15) * 15;
                     config.selectedRow = i - config.pageOffset;
+                    found = true;
                     break;
                 }
             }
         }
+        searchFound = found;
+    } else if (config.showSearch && !config.searchQuery.empty()) {
+        // Перевіряємо чи поточний запит взагалі має збіги (для підсвітки)
+        std::wstring query = config.searchQuery;
+        searchFound = false;
+        for (const auto& p : processes) {
+            std::wstring nameLower = p.name;
+            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+            if (nameLower.find(query) != std::wstring::npos) { searchFound = true; break; }
+        }
+    }
+
+    // Для Filter — перевіряємо чи є результати
+    bool filterHasResults = true;
+    if (config.showFilter && !config.searchQuery.empty() && processes.empty()) {
+        filterHasResults = false;
     }
 
     ULONGLONG uptimeMs = GetTickCount64();
@@ -529,12 +549,14 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     // Нижня панель
     if (config.showSearch || config.showFilter) {
+        bool hasResults = config.showSearch ? searchFound : filterHasResults;
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE
             << (config.showSearch ? L" F3 " : L" F4 ")
             << VT_BG_CYAN << VT_FG_BLACK
             << (config.showSearch ? (config.lang == Language::Ukrainian ? L"Пошук: " : L"Search: ")
                                   : (config.lang == Language::Ukrainian ? L"Фільтр: " : L"Filter: "))
-            << VT_RESET << VT_FG_BRIGHT_GREEN << config.searchQuery << L"_"
+            << VT_RESET << (hasResults ? VT_FG_BRIGHT_GREEN : VT_FG_BRIGHT_RED)
+            << config.searchQuery << L"_"
             << VT_RESET << VT_CLEAR_LINE;
     } else {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
