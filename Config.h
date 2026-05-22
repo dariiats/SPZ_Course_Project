@@ -42,11 +42,12 @@ struct AppConfig {
     int refreshInterval = 1000;
     bool showHelp = false;
     bool showSortMenu = false;
-    bool showSearch = false;
-    std::wstring searchQuery;
-    int sortMenuIndex = 5; // default = Res (index in menu list)
+    bool showSearch = false;       // F3 — Search (перехід до збігу)
+    bool showFilter = false;       // F4 — Filter (фільтрація списку)
+    std::wstring searchQuery;      // Спільний текст для Search і Filter
+    int sortMenuIndex = 5;
     int pageOffset = 0;
-    int selectedRow = 0; // виділений рядок у таблиці процесів
+    int selectedRow = 0;
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Res;
     IoSortColumn ioSortColumn = IoSortColumn::DiskRW;
