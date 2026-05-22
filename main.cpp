@@ -1,9 +1,11 @@
 // main.cpp
 #include "ConsoleUI.h"
+#include <iostream>
 #include <thread>
 #include <mutex>
 #include <atomic>
 #include <vector>
+#include <tlhelp32.h>
 
 // === Глобальний стан для синхронізації між потоками ===
 std::mutex g_configMutex;       // Захист AppConfig
@@ -195,23 +197,21 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             continue;
         }
 
-        std::lock_guard<std::mutex> lock(g_configMutex);
+        int interval;
+        {
+            std::lock_guard<std::mutex> lock(g_configMutex);
 
-        if (config.showSortMenu) {
-            ConsoleUI::RenderSortMenu(config);
-            Sleep(50);
-            continue;
+            if (config.showSortMenu) {
+                ConsoleUI::RenderSortMenu(config);
+            } else if (config.showHelp) {
+                ConsoleUI::RenderHelp(config.lang);
+            } else {
+                ConsoleUI::RenderMonitor(config, cpuMon);
+            }
+            interval = config.refreshInterval;
         }
-
-        if (config.showHelp) {
-            ConsoleUI::RenderHelp(config.lang);
-            Sleep(100);
-            continue;
-        }
-
-        ConsoleUI::RenderMonitor(config, cpuMon);
-        int interval = config.refreshInterval;
-        Sleep(interval / 2); // Рендер оновлюється частіше ніж дані
+        // Mutex звільнений — InputThread може працювати під час sleep
+        Sleep(interval / 4); // Рендер ~250мс — достатньо плавно
     }
 }
 
