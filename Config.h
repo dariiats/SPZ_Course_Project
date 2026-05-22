@@ -48,15 +48,16 @@ struct AppConfig {
     bool searchNeedsJump = false;  // Прапорець: потрібно перемістити курсор до збігу
     int searchMatchIndex = 0;      // Який збіг по порядку показувати (для F3 next)
     std::wstring searchQuery;      // Спільний текст для Search і Filter
-    int sortMenuIndex = 5;
+    int sortMenuIndex = 0;
     int pageOffset = 0;
     int selectedRow = 0;
     int savedPageOffset = 0;       // Збережена позиція перед Search
     int savedSelectedRow = 0;      // Збережений виділений рядок перед Search
     DWORD selectedPid = 0;         // PID виділеного процесу (оновлюється рендером)
+    DWORD pinnedPid = 0;           // PID закріпленого процесу (після пошуку/фільтру)
     TabView activeTab = TabView::Main;
-    SortColumn sortColumn = SortColumn::Res;
-    IoSortColumn ioSortColumn = IoSortColumn::DiskRW;
+    SortColumn sortColumn = SortColumn::Pid;
+    IoSortColumn ioSortColumn = IoSortColumn::Pid;
     bool sortAscending = false;
 };
 

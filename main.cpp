@@ -66,106 +66,94 @@ void InputThread(AppConfig& config) {
         if (GetAsyncKeyState(VK_F3) & 0x8000) {
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.showSearch = !config.showSearch;
-                config.showFilter = false;
-                if (config.showSearch) {
+                if (!config.showSearch) {
+                    config.showSearch = true;
+                    config.showFilter = false;
+                    config.searchQuery.clear();
+                    config.searchMatchIndex = 0;
                     config.savedPageOffset = config.pageOffset;
                     config.savedSelectedRow = config.selectedRow;
                 } else {
-                    config.searchQuery.clear();
+                    // Повторне F3 — наступний збіг
+                    config.searchMatchIndex++;
                 }
             }
-            while (GetAsyncKeyState(VK_F3) & 0x8000) Sleep(5);
-            Sleep(50);
+            Sleep(250);
             while (_kbhit()) _getch();
-
-            // Режим вводу Search
-            while (config.showSearch && g_running) {
-                if (!_kbhit()) { Sleep(10); continue; }
-                int ch = _getch();
-                if (ch == 0 || ch == 0xE0) {
-                    int ext = _getch();
-                    // F3 = 0x00 + 0x3D(61) — наступний збіг
-                    if (ext == 0x3D) {
-                        std::lock_guard<std::mutex> lock(g_configMutex);
-                        config.searchMatchIndex++;
-                    }
-                    continue;
-                }
-                if (ch == 27) {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.showSearch = false;
-                    config.searchQuery.clear();
-                    config.searchMatchIndex = 0;
-                    config.pageOffset = config.savedPageOffset;
-                    config.selectedRow = config.savedSelectedRow;
-                    break;
-                }
-                if (ch == '\r' || ch == '\n') {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.showSearch = false;
-                    config.searchQuery.clear();
-                    config.searchMatchIndex = 0;
-                    break;
-                }
-                if (ch == '\b') {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    if (!config.searchQuery.empty()) {
-                        config.searchQuery.pop_back();
-                        config.searchMatchIndex = 0;
-                    }
-                    continue;
-                }
-                if (ch >= 32 && ch < 127) {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.searchQuery += static_cast<wchar_t>(towlower(ch));
-                    config.searchMatchIndex = 0;
-                }
-            }
+            continue;
         }
 
         // [F4] - Filter (фільтрація списку)
         if (GetAsyncKeyState(VK_F4) & 0x8000) {
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.showFilter = !config.showFilter;
-                config.showSearch = false;
                 if (!config.showFilter) {
+                    config.showFilter = true;
+                    config.showSearch = false;
                     config.searchQuery.clear();
                     config.pageOffset = 0;
                     config.selectedRow = 0;
                 }
             }
-            while (GetAsyncKeyState(VK_F4) & 0x8000) Sleep(5);
-            Sleep(50);
+            Sleep(250);
             while (_kbhit()) _getch();
+            continue;
+        }
 
-            // Режим вводу Filter
-            while (config.showFilter && g_running) {
-                if (!_kbhit()) { Sleep(10); continue; }
+        // Режим вводу тексту для Search або Filter
+        if (config.showSearch || config.showFilter) {
+            if (_kbhit()) {
                 int ch = _getch();
-                if (ch == 0 || ch == 0xE0) { _getch(); continue; }
-                if (ch == 27) {
+                if (ch == 0 || ch == 0xE0) {
+                    int ext = _getch();
+                    // F3 (0x3D) — наступний збіг (в search)
+                    if (ext == 0x3D && config.showSearch) {
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        config.searchMatchIndex++;
+                    }
+                } else if (ch == 27) {
+                    // Esc — скасувати
                     std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.showFilter = false;
+                    if (config.showSearch) {
+                        config.showSearch = false;
+                        config.searchQuery.clear();
+                        config.searchMatchIndex = 0;
+                        config.pageOffset = config.savedPageOffset;
+                        config.selectedRow = config.savedSelectedRow;
+                    } else {
+                        config.showFilter = false;
+                        config.searchQuery.clear();
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                    }
+                } else if (ch == '\r' || ch == '\n') {
+                    // Enter — підтвердити
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    if (config.showSearch) {
+                        config.showSearch = false;
+                        config.pinnedPid = config.selectedPid;
+                        config.searchMatchIndex = 0;
+                    } else {
+                        config.showFilter = false;
+                        config.pinnedPid = config.selectedPid;
+                    }
                     config.searchQuery.clear();
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                    break;
-                }
-                if (ch == '\r' || ch == '\n') { std::lock_guard<std::mutex> lock(g_configMutex); config.showFilter = false; break; }
-                if (ch == '\b') {
+                } else if (ch == '\b') {
                     std::lock_guard<std::mutex> lock(g_configMutex);
-                    if (!config.searchQuery.empty()) { config.searchQuery.pop_back(); config.pageOffset = 0; config.selectedRow = 0; }
-                    continue;
-                }
-                if (ch >= 32 && ch < 127) {
+                    if (!config.searchQuery.empty()) {
+                        config.searchQuery.pop_back();
+                        if (config.showSearch) config.searchMatchIndex = 0;
+                        if (config.showFilter) { config.pageOffset = 0; config.selectedRow = 0; }
+                    }
+                } else if (ch >= 32 && ch < 127) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.searchQuery += static_cast<wchar_t>(towlower(ch));
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
+                    if (config.showSearch) config.searchMatchIndex = 0;
+                    if (config.showFilter) { config.pageOffset = 0; config.selectedRow = 0; }
                 }
             }
+            Sleep(30);
+            continue;
         }
 
         // [F2] - Меню сортування (Setup в htop)
@@ -263,6 +251,7 @@ void InputThread(AppConfig& config) {
         if (!config.showHelp && !config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
+                config.pinnedPid = 0;
                 if (config.selectedRow > 0) {
                     config.selectedRow--;
                 } else if (config.pageOffset > 0) {
@@ -272,17 +261,20 @@ void InputThread(AppConfig& config) {
             }
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
+                config.pinnedPid = 0;
                 config.selectedRow++;
                 Sleep(120);
             }
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
+                config.pinnedPid = 0;
                 config.pageOffset += 15;
                 config.selectedRow = 0;
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
+                config.pinnedPid = 0;
                 if (config.pageOffset >= 15) {
                     config.pageOffset -= 15;
                     config.selectedRow = 0;
