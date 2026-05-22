@@ -132,88 +132,61 @@ void InputThread(AppConfig& config) {
                 }
             }
             // Чекаємо поки F5 відпуститься
-            while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(10);
-            // Очищуємо буфер консолі
-            FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
-            Sleep(100);
+            while (GetAsyncKeyState(VK_F5) & 0x8000) Sleep(5);
+            Sleep(50);
+            // Очищуємо буфер
+            while (_kbhit()) _getch();
 
-            // Якщо пошук активний — режим прямого вводу
+            // Режим прямого вводу через _getch (миттєва реакція)
             while (config.showSearch && g_running) {
-                // Перевіряємо Esc
-                if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+                if (!_kbhit()) {
+                    Sleep(10);
+                    continue;
+                }
+                int ch = _getch();
+
+                // Extended key (F-keys, arrows)
+                if (ch == 0 || ch == 0xE0) {
+                    int ext = _getch(); // consume second byte
+                    // F5 = 0x00 + 0x3F(63)
+                    if (ext == 0x3F) {
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        config.showSearch = false;
+                        config.searchQuery.clear();
+                        config.pageOffset = 0;
+                        config.selectedRow = 0;
+                    }
+                    break;
+                }
+                if (ch == 27) { // Esc
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSearch = false;
                     config.searchQuery.clear();
                     config.pageOffset = 0;
                     config.selectedRow = 0;
-                    Sleep(200);
                     break;
                 }
-                // Enter — закрити пошук, залишити фільтр
-                if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
+                if (ch == '\r' || ch == '\n') { // Enter
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSearch = false;
-                    Sleep(200);
                     break;
                 }
-                // F5 — закрити пошук
-                if (GetAsyncKeyState(VK_F5) & 0x8000) {
-                    std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.showSearch = false;
-                    config.searchQuery.clear();
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                    Sleep(200);
-                    break;
-                }
-                // Backspace
-                if (GetAsyncKeyState(VK_BACK) & 0x8000) {
+                if (ch == '\b') { // Backspace
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     if (!config.searchQuery.empty()) {
                         config.searchQuery.pop_back();
                         config.pageOffset = 0;
                         config.selectedRow = 0;
                     }
-                    Sleep(120);
                     continue;
                 }
-                // Літери A-Z
-                bool found = false;
-                for (int key = 'A'; key <= 'Z'; ++key) {
-                    if (GetAsyncKeyState(key) & 0x8000) {
-                        std::lock_guard<std::mutex> lock(g_configMutex);
-                        config.searchQuery += static_cast<wchar_t>(key + 32);
-                        config.pageOffset = 0;
-                        config.selectedRow = 0;
-                        found = true;
-                        Sleep(120);
-                        break;
-                    }
-                }
-                if (found) continue;
-                // Цифри 0-9
-                for (int key = '0'; key <= '9'; ++key) {
-                    if (GetAsyncKeyState(key) & 0x8000) {
-                        std::lock_guard<std::mutex> lock(g_configMutex);
-                        config.searchQuery += static_cast<wchar_t>(key);
-                        config.pageOffset = 0;
-                        config.selectedRow = 0;
-                        found = true;
-                        Sleep(120);
-                        break;
-                    }
-                }
-                if (found) continue;
-                // Крапка
-                if (GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000) {
+                // Друковані символи
+                if (ch >= 32 && ch < 127) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
-                    config.searchQuery += L'.';
+                    config.searchQuery += static_cast<wchar_t>(towlower(ch));
                     config.pageOffset = 0;
                     config.selectedRow = 0;
-                    Sleep(120);
-                    continue;
                 }
-                Sleep(20);
             }
         }
 
