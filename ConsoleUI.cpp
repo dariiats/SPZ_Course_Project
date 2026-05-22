@@ -57,7 +57,17 @@ void ConsoleUI::InitConsole() {
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     SetConsoleMode(hOut, dwMode);
 
+    // Альтернативний screen buffer (як htop)
+    std::wcout << L"\x1b[?1049h";
     std::wcout << VT_CURSOR_HIDE;
+    std::wcout << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+
+    // Вимикаємо обробку вводу консоллю щоб _kbhit/_getch працювали коректно
+    HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD inMode = 0;
+    GetConsoleMode(hIn, &inMode);
+    inMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    SetConsoleMode(hIn, inMode);
 }
 
 void ConsoleUI::ResetCursor() {
@@ -146,7 +156,8 @@ void ConsoleUI::RenderHelp(Language lang) {
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
-    ResetCursor();
+    // Переміщуємо курсор на початок і забороняємо scroll
+    std::wcout << VT_CURSOR_HOME;
     int termWidth = GetConsoleWidth();
     std::wstring separator(termWidth, L'-');
 
@@ -206,27 +217,63 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         for (const auto& p : processes) {
             std::wstring nameLower = p.name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) != std::wstring::npos) {
+            if (nameLower.find(query) == 0) {
                 filtered.push_back(p);
             }
         }
         processes = std::move(filtered);
     }
 
-    // Search (F3) — знаходимо перший збіг і ставимо курсор
-    if (config.showSearch && !config.searchQuery.empty()) {
+    // Search (F3) — знаходимо N-й збіг і ставимо курсор
+    bool searchFound = true;
+    if (config.showSearch && config.searchNeedsJump && !config.searchQuery.empty()) {
+        config.searchNeedsJump = false;
         std::wstring query = config.searchQuery;
+        bool found = false;
+        int matchCount = 0;
+
         for (int i = 0; i < (int)processes.size(); ++i) {
             std::wstring nameLower = processes[i].name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
-            if (nameLower.find(query) != std::wstring::npos) {
-                if (i >= config.selectedRow + config.pageOffset) {
+            if (nameLower.find(query) == 0) {
+                if (matchCount == config.searchMatchIndex) {
                     config.pageOffset = (i / 15) * 15;
                     config.selectedRow = i - config.pageOffset;
+                    found = true;
+                    break;
+                }
+                matchCount++;
+            }
+        }
+        // Якщо matchIndex за межами — wrap around до першого
+        if (!found && matchCount > 0) {
+            config.searchMatchIndex = 0;
+            for (int i = 0; i < (int)processes.size(); ++i) {
+                std::wstring nameLower = processes[i].name;
+                std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+                if (nameLower.find(query) == 0) {
+                    config.pageOffset = (i / 15) * 15;
+                    config.selectedRow = i - config.pageOffset;
+                    found = true;
                     break;
                 }
             }
         }
+        searchFound = found;
+    } else if (config.showSearch && !config.searchQuery.empty()) {
+        std::wstring query = config.searchQuery;
+        searchFound = false;
+        for (const auto& p : processes) {
+            std::wstring nameLower = p.name;
+            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+            if (nameLower.find(query) == 0) { searchFound = true; break; }
+        }
+    }
+
+    // Для Filter — перевіряємо чи є результати
+    bool filterHasResults = true;
+    if (config.showFilter && !config.searchQuery.empty() && processes.empty()) {
+        filterHasResults = false;
     }
 
     ULONGLONG uptimeMs = GetTickCount64();
@@ -511,12 +558,14 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     // Нижня панель
     if (config.showSearch || config.showFilter) {
+        bool hasResults = config.showSearch ? searchFound : filterHasResults;
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE
             << (config.showSearch ? L" F3 " : L" F4 ")
             << VT_BG_CYAN << VT_FG_BLACK
             << (config.showSearch ? (config.lang == Language::Ukrainian ? L"Пошук: " : L"Search: ")
                                   : (config.lang == Language::Ukrainian ? L"Фільтр: " : L"Filter: "))
-            << VT_RESET << VT_FG_BRIGHT_GREEN << config.searchQuery << L"_"
+            << VT_RESET << (hasResults ? VT_FG_BRIGHT_GREEN : VT_FG_BRIGHT_RED)
+            << config.searchQuery << L"_"
             << VT_RESET << VT_CLEAR_LINE;
     } else {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
@@ -531,7 +580,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
         std::wcout << VT_RESET << VT_CLEAR_LINE;
     }
-    std::wcout << L"\x1b[J" << std::endl;
+    std::wcout << L"\x1b[J";
 }
 
 void ConsoleUI::RenderSortMenu(AppConfig& config) {
@@ -583,7 +632,7 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
         << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Обрати" : L"Sort  ")
         << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Esc "
         << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Назад " : L"Cancel")
-        << VT_RESET << VT_CLEAR_LINE << L"\x1b[J" << std::endl;
+        << VT_RESET << VT_CLEAR_LINE << L"\x1b[J";
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
