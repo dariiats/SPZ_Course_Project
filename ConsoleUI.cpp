@@ -281,7 +281,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     // === СОРТУВАННЯ ===
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
         if (config.activeTab == TabView::IO)
-            return (a.ioReadBytes + a.ioWriteBytes) > (b.ioReadBytes + b.ioWriteBytes);
+            return (a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite);
 
         bool result;
         switch (config.sortColumn) {
@@ -375,19 +375,23 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 return buf;
             };
 
-            std::wcout << std::left << std::setw(3) << L"B4" << L" ";
+            std::wcout << std::left << std::setw(3) << L"B7" << L" ";
             if (!isSelected) std::wcout << VT_RESET;
-            std::wstring rw = formatIO(proc.ioDiskRead) + L"/s";
+            // DISK R/W = read + write rate
+            std::wstring rw = formatIO(proc.ioDiskRead + proc.ioDiskWrite) + L"/s";
             std::wcout << std::right << std::setw(8) << rw << L" ";
+            // DISK READ rate
             if (!isSelected) std::wcout << VT_FG_BRIGHT_GREEN;
-            std::wstring dr = formatIO(proc.ioReadBytes) + L"/s";
+            std::wstring dr = formatIO(proc.ioDiskRead) + L"/s";
             std::wcout << std::right << std::setw(10) << dr << L" ";
+            // DISK WRITE rate
             if (!isSelected) std::wcout << VT_FG_BRIGHT_RED;
-            std::wstring dw = formatIO(proc.ioWriteBytes) + L"/s";
+            std::wstring dw = formatIO(proc.ioDiskWrite) + L"/s";
             std::wcout << std::right << std::setw(11) << dw << L" ";
             if (!isSelected) std::wcout << VT_RESET;
-            std::wcout << std::right << std::setw(5) << L"N/A" << L" ";
-            std::wcout << std::right << std::setw(5) << L"N/A" << L" ";
+            // SWAPIN% та IO% — не доступні через WinAPI
+            std::wcout << std::right << std::setw(5) << L"0.0" << L" ";
+            std::wcout << std::right << std::setw(5) << L"0.0" << L" ";
         }
 
         std::wcout << std::left << std::setw(cmdColW) << name;
@@ -411,7 +415,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Інтервал" : L"Interval");
     std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
-    std::wcout << VT_RESET << VT_CLEAR_LINE << std::endl;
+    std::wcout << VT_RESET << VT_CLEAR_LINE << L"\x1b[J" << std::endl;
 }
 
 void ConsoleUI::RenderSortMenu(AppConfig& config) {
