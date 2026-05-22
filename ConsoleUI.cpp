@@ -126,24 +126,32 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [F1]       - Відкрити/закрити довідку\n"
             << L"  [F2]       - Меню сортування\n"
             << L"  [F3]       - Пошук процесу (перехід до збігу)\n"
+            << L"               Повторне F3 — наступний збіг\n"
             << L"  [F4]       - Фільтр (залишає лише збіги)\n"
             << L"  [F6]       - Змінити напрямок сортування\n"
             << L"  [F7]       - Nice- (підвищити пріоритет)\n"
             << L"  [F8]       - Nice+ (знизити пріоритет)\n"
             << L"  [F9]       - Завершити процес за PID\n"
-            << L"  [F10]      - Вихід\n"
+            << L"  [F10]      - Вихід з програми\n"
             << L"  [Tab]      - Перемикання вкладок (Main / IO)\n"
             << L"  [L]        - Змінити мову (UA / EN)\n"
             << L"  [I]        - Змінити інтервал оновлення\n"
             << L"  [Вгору/Вниз] - Виділити процес\n"
             << L"  [<- / ->]  - Гортання сторінок\n"
-            << L"  [Esc]      - Скасувати / закрити\n"
-            << L"  [Enter]    - Підтвердити\n\n Натисніть [F1] щоб повернутись...";
+            << L"  [Enter]    - Підтвердити (закріпити процес)\n"
+            << L"  [Esc]      - Скасувати пошук/фільтр або\n"
+            << L"               скинути закріплення (жовтий)\n\n"
+            << L"  Закріплення: після Enter в пошуку/фільтрі\n"
+            << L"  процес виділяється жовтим. Курсор тримається\n"
+            << L"  на ньому при оновленні. Скинути: Esc або\n"
+            << L"  стрілки.\n\n"
+            << L" Натисніть [F1] щоб повернутись...";
     } else {
         std::wcout << VT_RESET
             << L"  [F1]       - Close/open this help window\n"
             << L"  [F2]       - Sort menu\n"
             << L"  [F3]       - Search (jump to match)\n"
+            << L"               Press F3 again — next match\n"
             << L"  [F4]       - Filter (show only matches)\n"
             << L"  [F6]       - Toggle sort direction\n"
             << L"  [F7]       - Nice- (raise priority)\n"
@@ -155,10 +163,15 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [I]        - Change refresh interval\n"
             << L"  [Up/Down]  - Select process\n"
             << L"  [<- / ->]  - Page scroll\n"
-            << L"  [Esc]      - Cancel / close\n"
-            << L"  [Enter]    - Confirm\n\n Press [F1] to return...";
+            << L"  [Enter]    - Confirm (pin process)\n"
+            << L"  [Esc]      - Cancel search/filter or\n"
+            << L"               unpin process (yellow)\n\n"
+            << L"  Pinning: after Enter in search/filter the\n"
+            << L"  process is highlighted yellow. Cursor stays\n"
+            << L"  on it during refresh. Reset: Esc or arrows.\n\n"
+            << L" Press [F1] to return...";
     }
-    for (int i = 0; i < 18; i++) std::wcout << std::setw(w) << L" " << std::endl;
+    for (int i = 0; i < 10; i++) std::wcout << std::setw(w) << L" " << std::endl;
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
@@ -448,6 +461,24 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         searchFound = found;
     } else if (config.showSearch) {
         searchFound = true;
+    } else if (config.pinnedPid != 0) {
+        // Тримаємо курсор на закріпленому процесі після оновлення даних
+        for (int i = 0; i < (int)processes.size(); ++i) {
+            if (processes[i].pid == config.pinnedPid) {
+                config.pageOffset = (i / 15) * 15;
+                config.selectedRow = i - config.pageOffset;
+                break;
+            }
+        }
+    } else if (config.selectedPid != 0) {
+        // Тримаємо курсор на тому ж процесі по PID при оновленні списку
+        for (int i = 0; i < (int)processes.size(); ++i) {
+            if (processes[i].pid == config.selectedPid) {
+                config.pageOffset = (i / 15) * 15;
+                config.selectedRow = i - config.pageOffset;
+                break;
+            }
+        }
     }
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
@@ -485,11 +516,15 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         if (user.length() > 8) user = user.substr(0, 8);
 
         bool isSelected = (printedCount == config.selectedRow);
-        bool isPinned = (config.pinnedPid != 0 && proc.pid == config.pinnedPid && !isSelected);
+        bool isPinned = (config.pinnedPid != 0 && proc.pid == config.pinnedPid);
 
         if (isSelected) {
             config.selectedPid = proc.pid;
-            std::wcout << VT_BG_CYAN << VT_FG_BLACK;
+            if (isPinned) {
+                std::wcout << L"\x1b[43m" << VT_FG_BLACK; // жовтий фон
+            } else {
+                std::wcout << VT_BG_CYAN << VT_FG_BLACK;
+            }
         } else if (isPinned) {
             std::wcout << VT_FG_YELLOW;
         } else {

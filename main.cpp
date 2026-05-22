@@ -120,11 +120,15 @@ void InputThread(AppConfig& config) {
                         config.searchMatchIndex = 0;
                         config.pageOffset = config.savedPageOffset;
                         config.selectedRow = config.savedSelectedRow;
+                        config.selectedPid = 0;
+                        config.pinnedPid = 0;
                     } else {
                         config.showFilter = false;
                         config.searchQuery.clear();
                         config.pageOffset = 0;
                         config.selectedRow = 0;
+                        config.selectedPid = 0;
+                        config.pinnedPid = 0;
                     }
                 } else if (ch == '\r' || ch == '\n') {
                     // Enter — підтвердити
@@ -252,6 +256,7 @@ void InputThread(AppConfig& config) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.pinnedPid = 0;
+                config.selectedPid = 0;
                 if (config.selectedRow > 0) {
                     config.selectedRow--;
                 } else if (config.pageOffset > 0) {
@@ -262,12 +267,14 @@ void InputThread(AppConfig& config) {
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.pinnedPid = 0;
+                config.selectedPid = 0;
                 config.selectedRow++;
                 Sleep(120);
             }
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.pinnedPid = 0;
+                config.selectedPid = 0;
                 config.pageOffset += 15;
                 config.selectedRow = 0;
                 Sleep(150);
@@ -275,12 +282,23 @@ void InputThread(AppConfig& config) {
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.pinnedPid = 0;
+                config.selectedPid = 0;
                 if (config.pageOffset >= 15) {
                     config.pageOffset -= 15;
                     config.selectedRow = 0;
                 }
                 Sleep(150);
             }
+        }
+
+        // [Esc] - Скинути пін і повернутись на початок списку
+        if (!config.showSearch && !config.showFilter && !config.showSortMenu && (GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.pinnedPid = 0;
+            config.selectedPid = 0;
+            config.pageOffset = 0;
+            config.selectedRow = 0;
+            Sleep(250);
         }
 
         // [F9] - Kill
