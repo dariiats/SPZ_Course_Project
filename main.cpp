@@ -191,7 +191,18 @@ void DataThread(AppConfig& config) {
 // ПОТІК 3: Render — відображення UI
 // ============================================================
 void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
+    int prevWidth = 0;
+
     while (g_running) {
+        // Детекція зміни розміру вікна
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+        int curWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        if (prevWidth != 0 && curWidth != prevWidth) {
+            std::wcout << L"\x1b[2J\x1b[H"; // Повне очищення при resize
+        }
+        prevWidth = curWidth;
+
         // Очищення екрану якщо потрібно
         if (g_needsCls.exchange(false)) {
             std::wcout << L"\x1b[2J\x1b[H";
