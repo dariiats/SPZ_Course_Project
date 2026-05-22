@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
-#include <tlhelp32.h>
+#include <mutex>
 
 // === Virtual Terminal Sequences ===
 // Foreground colors
@@ -159,7 +159,16 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     double totalPageG = memInfo.ullTotalPageFile / (1024.0 * 1024.0 * 1024.0);
     double usedPageG = (memInfo.ullTotalPageFile - memInfo.ullAvailPageFile) / (1024.0 * 1024.0 * 1024.0);
 
-    std::vector<ProcessInfo> processes = SystemManager::GetProcesses();
+    std::vector<ProcessInfo> processes;
+    int totalThreads = 0;
+    {
+        extern std::mutex g_dataMutex;
+        extern std::vector<ProcessInfo> g_cachedProcesses;
+        extern int g_cachedThreadCount;
+        std::lock_guard<std::mutex> lock(g_dataMutex);
+        processes = g_cachedProcesses;
+        totalThreads = g_cachedThreadCount;
+    }
 
     ULONGLONG uptimeMs = GetTickCount64();
     int days = static_cast<int>(uptimeMs / (1000ULL * 60 * 60 * 24));
@@ -171,17 +180,8 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     DrawWideBar(L"Mem", usedMemG, totalMemG, VT_FG_BRIGHT_GREEN);
     std::wcout << VT_FG_BRIGHT_CYAN << L"  Tasks: " << VT_RESET;
     int runningCount = 0;
-    int totalThreads = 0;
     for (const auto& p : processes) {
         if (p.state == L'R') runningCount++;
-    }
-    HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if (hThreadSnap != INVALID_HANDLE_VALUE) {
-        THREADENTRY32 te = { sizeof(THREADENTRY32) };
-        if (Thread32First(hThreadSnap, &te)) {
-            do { totalThreads++; } while (Thread32Next(hThreadSnap, &te));
-        }
-        CloseHandle(hThreadSnap);
     }
     std::wcout << processes.size() << L", " << totalThreads << L" thr; "
         << runningCount << L" running" << VT_CLEAR_LINE << std::endl;
