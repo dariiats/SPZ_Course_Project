@@ -310,35 +310,58 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     // === СОРТУВАННЯ ===
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
-        bool result;
+        int cmp = 0; // -1: a<b, 0: equal, 1: a>b
         if (config.activeTab == TabView::IO) {
             switch (config.ioSortColumn) {
-                case IoSortColumn::Pid:       result = a.pid > b.pid; break;
-                case IoSortColumn::User:      result = a.userName < b.userName; break;
-                case IoSortColumn::DiskRW:    result = (a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite); break;
-                case IoSortColumn::DiskRead:  result = a.ioDiskRead > b.ioDiskRead; break;
-                case IoSortColumn::DiskWrite: result = a.ioDiskWrite > b.ioDiskWrite; break;
-                case IoSortColumn::Command:   result = a.name < b.name; break;
-                default:                      result = (a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite); break;
+                case IoSortColumn::Pid:
+                    cmp = (a.pid > b.pid) ? 1 : (a.pid < b.pid) ? -1 : 0; break;
+                case IoSortColumn::User:
+                    cmp = (a.userName < b.userName) ? 1 : (a.userName > b.userName) ? -1 : 0; break;
+                case IoSortColumn::DiskRW:
+                    cmp = ((a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite)) ? 1 :
+                          ((a.ioDiskRead + a.ioDiskWrite) < (b.ioDiskRead + b.ioDiskWrite)) ? -1 : 0; break;
+                case IoSortColumn::DiskRead:
+                    cmp = (a.ioDiskRead > b.ioDiskRead) ? 1 : (a.ioDiskRead < b.ioDiskRead) ? -1 : 0; break;
+                case IoSortColumn::DiskWrite:
+                    cmp = (a.ioDiskWrite > b.ioDiskWrite) ? 1 : (a.ioDiskWrite < b.ioDiskWrite) ? -1 : 0; break;
+                case IoSortColumn::Command:
+                    cmp = (a.name < b.name) ? 1 : (a.name > b.name) ? -1 : 0; break;
+                default:
+                    cmp = ((a.ioDiskRead + a.ioDiskWrite) > (b.ioDiskRead + b.ioDiskWrite)) ? 1 :
+                          ((a.ioDiskRead + a.ioDiskWrite) < (b.ioDiskRead + b.ioDiskWrite)) ? -1 : 0; break;
             }
         } else {
             switch (config.sortColumn) {
-                case SortColumn::Pid:        result = a.pid > b.pid; break;
-                case SortColumn::User:       result = a.userName < b.userName; break;
-                case SortColumn::Priority:   result = a.priority < b.priority; break;
-                case SortColumn::Nice:       result = a.niceness < b.niceness; break;
-                case SortColumn::Virt:       result = a.virtualMemory > b.virtualMemory; break;
-                case SortColumn::Res:        result = a.memoryUsage > b.memoryUsage; break;
-                case SortColumn::Shr:        result = a.sharedMemory > b.sharedMemory; break;
-                case SortColumn::State:      result = a.state < b.state; break;
-                case SortColumn::CpuPercent: result = a.cpuPercent > b.cpuPercent; break;
-                case SortColumn::MemPercent: result = a.memPercent > b.memPercent; break;
-                case SortColumn::Time:       result = a.cpuTime > b.cpuTime; break;
-                case SortColumn::Command:    result = a.name < b.name; break;
-                default:                     result = a.memoryUsage > b.memoryUsage; break;
+                case SortColumn::Pid:
+                    cmp = (a.pid > b.pid) ? 1 : (a.pid < b.pid) ? -1 : 0; break;
+                case SortColumn::User:
+                    cmp = (a.userName < b.userName) ? 1 : (a.userName > b.userName) ? -1 : 0; break;
+                case SortColumn::Priority:
+                    cmp = (a.priority < b.priority) ? 1 : (a.priority > b.priority) ? -1 : 0; break;
+                case SortColumn::Nice:
+                    cmp = (a.niceness < b.niceness) ? 1 : (a.niceness > b.niceness) ? -1 : 0; break;
+                case SortColumn::Virt:
+                    cmp = (a.virtualMemory > b.virtualMemory) ? 1 : (a.virtualMemory < b.virtualMemory) ? -1 : 0; break;
+                case SortColumn::Res:
+                    cmp = (a.memoryUsage > b.memoryUsage) ? 1 : (a.memoryUsage < b.memoryUsage) ? -1 : 0; break;
+                case SortColumn::Shr:
+                    cmp = (a.sharedMemory > b.sharedMemory) ? 1 : (a.sharedMemory < b.sharedMemory) ? -1 : 0; break;
+                case SortColumn::State:
+                    cmp = (a.state < b.state) ? 1 : (a.state > b.state) ? -1 : 0; break;
+                case SortColumn::CpuPercent:
+                    cmp = (a.cpuPercent > b.cpuPercent) ? 1 : (a.cpuPercent < b.cpuPercent) ? -1 : 0; break;
+                case SortColumn::MemPercent:
+                    cmp = (a.memPercent > b.memPercent) ? 1 : (a.memPercent < b.memPercent) ? -1 : 0; break;
+                case SortColumn::Time:
+                    cmp = (a.cpuTime > b.cpuTime) ? 1 : (a.cpuTime < b.cpuTime) ? -1 : 0; break;
+                case SortColumn::Command:
+                    cmp = (a.name < b.name) ? 1 : (a.name > b.name) ? -1 : 0; break;
+                default:
+                    cmp = (a.memoryUsage > b.memoryUsage) ? 1 : (a.memoryUsage < b.memoryUsage) ? -1 : 0; break;
             }
         }
-        return config.sortAscending ? !result : result;
+        if (cmp == 0) return false; // рівні елементи — strict weak ordering
+        return config.sortAscending ? (cmp < 0) : (cmp > 0);
     });
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
