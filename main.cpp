@@ -59,7 +59,12 @@ void InputThread(AppConfig& config) {
         if (GetAsyncKeyState(VK_F3) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showSortMenu = !config.showSortMenu;
-            if (config.showSortMenu) g_needsCls = true;
+            if (config.showSortMenu) {
+                // Скидаємо індекс якщо він за межами для поточної вкладки
+                int maxIdx = (config.activeTab == TabView::IO) ? 6 : 11;
+                if (config.sortMenuIndex > maxIdx) config.sortMenuIndex = 0;
+                g_needsCls = true;
+            }
             Sleep(250);
         }
 
@@ -72,12 +77,17 @@ void InputThread(AppConfig& config) {
             }
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                if (config.sortMenuIndex < 11) config.sortMenuIndex++;
+                int maxIdx = (config.activeTab == TabView::IO) ? 6 : 11;
+                if (config.sortMenuIndex < maxIdx) config.sortMenuIndex++;
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.sortColumn = static_cast<SortColumn>(config.sortMenuIndex);
+                if (config.activeTab == TabView::IO) {
+                    config.ioSortColumn = static_cast<IoSortColumn>(config.sortMenuIndex);
+                } else {
+                    config.sortColumn = static_cast<SortColumn>(config.sortMenuIndex);
+                }
                 config.showSortMenu = false;
                 config.pageOffset = 0;
                 config.selectedRow = 0;
