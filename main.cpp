@@ -24,21 +24,21 @@ std::vector<double> g_cachedCoreUsages;
 // ============================================================
 void InputThread(AppConfig& config) {
     while (g_running) {
-        // [F1] або [H] - Довідка
-        if ((GetAsyncKeyState(VK_F1) & 0x8000) || (GetAsyncKeyState('H') & 0x8000)) {
+        // [F1] - Довідка
+        if (GetAsyncKeyState(VK_F1) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showHelp = !config.showHelp;
             g_needsCls = true;
             Sleep(250);
         }
-        // [F2] або [L] - Мова
-        if ((GetAsyncKeyState(VK_F2) & 0x8000) || (GetAsyncKeyState('L') & 0x8000)) {
+        // [F2] - Мова
+        if (GetAsyncKeyState(VK_F2) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
             Sleep(250);
         }
-        // [F6] або [I] - Інтервал
-        if ((GetAsyncKeyState(VK_F6) & 0x8000) || (GetAsyncKeyState('I') & 0x8000)) {
+        // [F6] - Інтервал
+        if (GetAsyncKeyState(VK_F6) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             if (config.refreshInterval == 1000) config.refreshInterval = 3000;
             else if (config.refreshInterval == 3000) config.refreshInterval = 5000;
@@ -55,8 +55,8 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F3] або [S] - Меню сортування
-        if ((GetAsyncKeyState(VK_F3) & 0x8000) || (GetAsyncKeyState('S') & 0x8000)) {
+        // [F3] - Меню сортування
+        if (GetAsyncKeyState(VK_F3) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showSortMenu = !config.showSortMenu;
             if (config.showSortMenu) g_needsCls = true;
@@ -94,8 +94,8 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F4] або [R] - Інвертувати сортування
-        if ((GetAsyncKeyState(VK_F4) & 0x8000) || (GetAsyncKeyState('R') & 0x8000)) {
+        // [F4] - Інвертувати сортування
+        if (GetAsyncKeyState(VK_F4) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.sortAscending = !config.sortAscending;
             config.pageOffset = 0;
@@ -135,8 +135,8 @@ void InputThread(AppConfig& config) {
             }
         }
 
-        // [F9] або [K] - Kill
-        if ((GetAsyncKeyState(VK_F9) & 0x8000) || (GetAsyncKeyState('K') & 0x8000)) {
+        // [F9] - Kill
+        if (GetAsyncKeyState(VK_F9) & 0x8000) {
             g_killRequested = true;
             Sleep(250);
         }

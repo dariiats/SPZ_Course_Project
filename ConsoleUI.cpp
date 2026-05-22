@@ -111,15 +111,15 @@ void ConsoleUI::RenderHelp(Language lang) {
         << L"=== " << (lang == Language::Ukrainian ? L"ДОВІДКА" : L"HELP SYSTEM") << L" ==="
         << std::setw(w - 15) << L" " << std::endl;
     std::wcout << VT_RESET
-        << L"  [F1 / H] - Close/open this help window\n"
-        << L"  [F2 / L] - Toggle language (UA / EN)\n"
-        << L"  [F3 / S] - Open sort menu (arrows + Enter/Esc)\n"
-        << L"  [F4 / R] - Toggle sort direction (Asc/Desc)\n"
-        << L"  [F6 / I] - Change refresh interval\n"
-        << L"  [F9 / K] - Kill process via PID\n"
+        << L"  [F1]     - Close/open this help window\n"
+        << L"  [F2]     - Toggle language (UA / EN)\n"
+        << L"  [F3]     - Open sort menu (arrows + Enter/Esc)\n"
+        << L"  [F4]     - Toggle sort direction (Asc/Desc)\n"
+        << L"  [F6]     - Change refresh interval\n"
+        << L"  [F9]     - Kill process via PID\n"
         << L"  [Tab]    - Switch tab (Main / IO)\n"
         << L"  [Up/Down]  - Select process\n"
-        << L"  [<- / ->]  - Page scroll\n\n Press [H] to return...";
+        << L"  [<- / ->]  - Page scroll\n\n Press [F1] to return...";
     for (int i = 0; i < 18; i++) std::wcout << std::setw(w) << L" " << std::endl;
 }
 
@@ -188,18 +188,13 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     std::wcout << VT_FG_BRIGHT_CYAN << L"  Tasks: " << VT_RESET;
     int runningCount = 0;
     for (const auto& p : processes) {
-        if (p.state == L'R') runningCount++;
+        if (p.cpuPercent > 0.0) runningCount++;
     }
     std::wcout << processes.size() << L", " << totalThreads << L" thr; "
         << runningCount << L" running" << VT_CLEAR_LINE << std::endl;
 
     DrawWideBar(L"Swp", usedPageG, totalPageG, VT_FG_BRIGHT_RED);
-    std::wcout << VT_CLEAR_LINE << std::endl;
-
-    // Uptime вирівняний під Tasks/Load avg
-    // DrawWideBar виводить: 4(label) + 1([) + 35(bars) + 13(числа+]) = 53 символи
-    std::wstring uptimePad(53, L' ');
-    std::wcout << uptimePad << VT_FG_BRIGHT_CYAN << L"  Uptime: " << VT_RESET;
+    std::wcout << VT_FG_BRIGHT_CYAN << L"  Uptime: " << VT_RESET;
     if (days > 0) std::wcout << days << L" days, ";
     std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
         << std::setw(2) << mins << L":" << std::setw(2) << secs
