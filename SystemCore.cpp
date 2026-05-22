@@ -10,6 +10,7 @@
 // Статичні члени SystemManager
 std::unordered_map<DWORD, SystemManager::PrevCpuData> SystemManager::prevCpuMap_;
 ULONGLONG SystemManager::prevSystemTime_ = 0;
+std::unordered_map<DWORD, SystemManager::PrevIoData> SystemManager::prevIoMap_;
 
 static std::wstring GetProcessUserName(HANDLE hProcess) {
     HANDLE hToken = NULL;
@@ -202,6 +203,7 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
     int numCores = si.dwNumberOfProcessors;
 
     std::unordered_map<DWORD, PrevCpuData> newCpuMap;
+    std::unordered_map<DWORD, PrevIoData> newIoMap;
 
     PROCESSENTRY32W pe = { sizeof(PROCESSENTRY32W) };
     if (Process32FirstW(hSnapshot, &pe)) {
@@ -280,13 +282,29 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                 // User name
                 info.userName = GetProcessUserName(hProcess);
 
-                // I/O
+                // I/O — обчислення rate через дельту
                 IO_COUNTERS ioCounters;
                 if (GetProcessIoCounters(hProcess, &ioCounters)) {
                     info.ioReadBytes = ioCounters.ReadTransferCount;
                     info.ioWriteBytes = ioCounters.WriteTransferCount;
-                    info.ioDiskRead = ioCounters.ReadTransferCount;
-                    info.ioDiskWrite = ioCounters.WriteTransferCount;
+
+                    // Rate = (current - previous) / deltaTime
+                    auto ioIt = prevIoMap_.find(pe.th32ProcessID);
+                    if (ioIt != prevIoMap_.end() && prevSystemTime_ > 0 && systemTimeDelta > 0) {
+                        // systemTimeDelta в 100ns units, конвертуємо в секунди
+                        double deltaSec = static_cast<double>(systemTimeDelta) / 10000000.0;
+                        if (deltaSec > 0.0) {
+                            ULONGLONG readDelta = ioCounters.ReadTransferCount - ioIt->second.readBytes;
+                            ULONGLONG writeDelta = ioCounters.WriteTransferCount - ioIt->second.writeBytes;
+                            info.ioDiskRead = static_cast<ULONGLONG>(readDelta / deltaSec);
+                            info.ioDiskWrite = static_cast<ULONGLONG>(writeDelta / deltaSec);
+                        }
+                    } else {
+                        info.ioDiskRead = 0;
+                        info.ioDiskWrite = 0;
+                    }
+                    // Зберігаємо поточні IO для наступного виклику
+                    newIoMap[pe.th32ProcessID] = { ioCounters.ReadTransferCount, ioCounters.WriteTransferCount };
                 }
 
                 CloseHandle(hProcess);
@@ -298,6 +316,7 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
 
     // Оновлюємо збережені дані для наступної ітерації
     prevCpuMap_ = std::move(newCpuMap);
+    prevIoMap_ = std::move(newIoMap);
     prevSystemTime_ = curSystemTime;
 
     return processList;
