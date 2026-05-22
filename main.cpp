@@ -5,6 +5,7 @@
 #include <mutex>
 #include <atomic>
 #include <vector>
+#include <conio.h>
 #include <tlhelp32.h>
 
 // === Глобальний стан для синхронізації між потоками ===
@@ -13,6 +14,7 @@ std::mutex g_dataMutex;         // Захист кешованих даних п
 std::atomic<bool> g_needsCls{ false };
 std::atomic<bool> g_killRequested{ false };
 std::atomic<bool> g_running{ true };
+std::atomic<bool> g_inputPaused{ false };
 
 // Кешовані дані процесів (заповнюються Data Thread, читаються Render Thread)
 std::vector<ProcessInfo> g_cachedProcesses;
@@ -24,6 +26,11 @@ std::vector<double> g_cachedCoreUsages;
 // ============================================================
 void InputThread(AppConfig& config) {
     while (g_running) {
+        // Пауза під час Kill-діалогу
+        if (g_inputPaused) {
+            Sleep(50);
+            continue;
+        }
         // [F1] - Довідка
         if (GetAsyncKeyState(VK_F1) & 0x8000) {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -220,8 +227,14 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
 
         // Kill-діалог (потребує stdin)
         if (g_killRequested.exchange(false)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            ConsoleUI::HandleKillDialog(config, cpuMon);
+            g_inputPaused = true;
+            // Очищуємо stdin від залишків
+            while (_kbhit()) _getch();
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                ConsoleUI::HandleKillDialog(config, cpuMon);
+            }
+            g_inputPaused = false;
             continue;
         }
 

@@ -7,6 +7,7 @@
 #include <vector>
 #include <cmath>
 #include <mutex>
+#include <conio.h>
 
 // === Virtual Terminal Sequences ===
 // Foreground colors
@@ -535,24 +536,49 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
     std::wcout << VT_CURSOR_SHOW;
-    DWORD pidToKill = 0;
 
+    bool ua = (config.lang == Language::Ukrainian);
     std::wcout << VT_FG_BRIGHT_RED
-        << (config.lang == Language::Ukrainian ? L"\n[KILL] Введіть PID процесу: " : L"\n[KILL] Enter Target PID: ")
+        << (ua ? L"\n[KILL] Введіть PID (Esc - скасувати): " : L"\n[KILL] Enter PID (Esc to cancel): ")
         << VT_RESET;
-    std::cin >> pidToKill;
 
-    if (std::cin.fail()) {
-        std::cin.clear();
-        (std::cin.ignore)((std::numeric_limits<std::streamsize>::max)(), '\n');
+    // Посимвольне читання PID з підтримкою Esc
+    std::wstring pidStr;
+    while (true) {
+        int ch = _getch();
+        if (ch == 27) { // Esc
+            std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+            cpuMon.Reset();
+            return;
+        }
+        if (ch == '\r' || ch == '\n') { // Enter
+            break;
+        }
+        if (ch == '\b' || ch == 127) { // Backspace
+            if (!pidStr.empty()) {
+                pidStr.pop_back();
+                std::wcout << L"\b \b";
+            }
+            continue;
+        }
+        if (ch >= '0' && ch <= '9') {
+            pidStr += static_cast<wchar_t>(ch);
+            std::wcout << static_cast<wchar_t>(ch);
+        }
+    }
+    std::wcout << std::endl;
+
+    if (pidStr.empty()) {
         std::wcout << VT_FG_BRIGHT_RED
-            << (config.lang == Language::Ukrainian ? L"[Помилка] Некоректний формат!" : L"[Error] Invalid PID format!")
+            << (ua ? L"[Помилка] PID не введено!" : L"[Error] No PID entered!")
             << VT_RESET;
         Sleep(1200);
         std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
         cpuMon.Reset();
         return;
     }
+
+    DWORD pidToKill = static_cast<DWORD>(std::stoul(pidStr));
 
     DWORD result = SystemManager::KillProcess(pidToKill);
     if (result == 0) {
