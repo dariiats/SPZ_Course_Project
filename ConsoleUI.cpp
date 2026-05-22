@@ -191,6 +191,21 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         totalThreads = g_cachedThreadCount;
     }
 
+    // Фільтрація за пошуковим запитом
+    if (config.showSearch && !config.searchQuery.empty()) {
+        std::wstring query = config.searchQuery;
+        // Перетворюємо в lowercase для case-insensitive пошуку
+        std::vector<ProcessInfo> filtered;
+        for (const auto& p : processes) {
+            std::wstring nameLower = p.name;
+            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
+            if (nameLower.find(query) != std::wstring::npos) {
+                filtered.push_back(p);
+            }
+        }
+        processes = std::move(filtered);
+    }
+
     ULONGLONG uptimeMs = GetTickCount64();
     int days = static_cast<int>(uptimeMs / (1000ULL * 60 * 60 * 24));
     int hours = static_cast<int>((uptimeMs / (1000ULL * 60 * 60)) % 24);
@@ -471,15 +486,25 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     // === НИЖНЯ ПАНЕЛЬ ===
     std::wcout << VT_FG_DARKGRAY << separator << std::endl;
 
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? (config.lang == Language::Ukrainian ? L"Зрост" : L"Asc ") : (config.lang == Language::Ukrainian ? L"Спад " : L"Desc"));
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK
-        << (config.refreshInterval / 1000) << (config.lang == Language::Ukrainian ? L"с " : L"s ");
-    std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
-    std::wcout << VT_RESET << VT_CLEAR_LINE << L"\x1b[J" << std::endl;
+    // Рядок пошуку (якщо активний)
+    if (config.showSearch) {
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F5 " << VT_BG_CYAN << VT_FG_BLACK
+            << (config.lang == Language::Ukrainian ? L"Пошук: " : L"Search: ")
+            << VT_RESET << VT_FG_BRIGHT_GREEN << config.searchQuery << L"_"
+            << VT_RESET << VT_CLEAR_LINE << std::endl;
+    } else {
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка " : L"Help    ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Мова    " : L"Lang    ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт    " : L"Sort    ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? (config.lang == Language::Ukrainian ? L"Зрост" : L"Asc ") : (config.lang == Language::Ukrainian ? L"Спад " : L"Desc"));
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F5 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пошук " : L"Search");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка " : L"Tab     ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK
+            << (config.refreshInterval / 1000) << (config.lang == Language::Ukrainian ? L"с " : L"s ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш  " : L"Kill    ");
+        std::wcout << VT_RESET << VT_CLEAR_LINE;
+    }
+    std::wcout << L"\x1b[J" << std::endl;
 }
 
 void ConsoleUI::RenderSortMenu(AppConfig& config) {

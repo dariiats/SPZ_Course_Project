@@ -120,6 +120,59 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
+        // [F5] - Пошук
+        if (GetAsyncKeyState(VK_F5) & 0x8000) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.showSearch = !config.showSearch;
+            if (!config.showSearch) {
+                config.searchQuery.clear();
+                config.pageOffset = 0;
+                config.selectedRow = 0;
+            }
+            Sleep(250);
+        }
+
+        // Введення тексту пошуку
+        if (config.showSearch && !config.showSortMenu && !config.showHelp) {
+            for (int key = 'A'; key <= 'Z'; ++key) {
+                if (GetAsyncKeyState(key) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.searchQuery += static_cast<wchar_t>(key + 32); // lowercase
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    Sleep(150);
+                }
+            }
+            for (int key = '0'; key <= '9'; ++key) {
+                if (GetAsyncKeyState(key) & 0x8000) {
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    config.searchQuery += static_cast<wchar_t>(key);
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                    Sleep(150);
+                }
+            }
+            // Backspace
+            if (GetAsyncKeyState(VK_BACK) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                if (!config.searchQuery.empty()) {
+                    config.searchQuery.pop_back();
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                }
+                Sleep(150);
+            }
+            // Esc — закрити пошук
+            if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                config.showSearch = false;
+                config.searchQuery.clear();
+                config.pageOffset = 0;
+                config.selectedRow = 0;
+                Sleep(250);
+            }
+        }
+
         // Стрілки — виділення та гортання
         if (!config.showHelp && !config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
