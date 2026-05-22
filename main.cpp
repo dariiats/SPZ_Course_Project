@@ -17,6 +17,7 @@ std::atomic<bool> g_running{ true };
 // Кешовані дані процесів (заповнюються Data Thread, читаються Render Thread)
 std::vector<ProcessInfo> g_cachedProcesses;
 int g_cachedThreadCount = 0;
+std::vector<double> g_cachedCoreUsages;
 
 // ============================================================
 // ПОТІК 1: Input — обробка клавіатури (polling ~30ms)
@@ -148,6 +149,8 @@ void InputThread(AppConfig& config) {
 // ПОТІК 2: Data Collector — збір даних процесів у фоні
 // ============================================================
 void DataThread(AppConfig& config) {
+    PerCoreCpuMonitor coreMon;
+
     while (g_running) {
         // Збір даних (найважча операція)
         std::vector<ProcessInfo> freshProcesses = SystemManager::GetProcesses();
@@ -163,11 +166,15 @@ void DataThread(AppConfig& config) {
             CloseHandle(hThreadSnap);
         }
 
+        // Оновлення per-core CPU
+        coreMon.Update();
+
         // Оновлення кешу під mutex
         {
             std::lock_guard<std::mutex> lock(g_dataMutex);
             g_cachedProcesses = std::move(freshProcesses);
             g_cachedThreadCount = threadCount;
+            g_cachedCoreUsages = coreMon.GetAllCoreUsages();
         }
 
         // Спимо відповідно до інтервалу оновлення
@@ -239,6 +246,10 @@ int main() {
             }
             CloseHandle(hThreadSnap);
         }
+        // Ініціалізація per-core (нулі на першому кадрі)
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        g_cachedCoreUsages.resize(si.dwNumberOfProcessors, 0.0);
     }
 
     // Запуск 3 потоків

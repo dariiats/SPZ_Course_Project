@@ -133,18 +133,25 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     int numCores = sysInfo.dwNumberOfProcessors;
     double overallCpu = cpuMon.GetCpuUsage();
 
+    // Отримуємо реальні per-core дані з кешу
+    std::vector<double> coreUsages;
+    {
+        extern std::mutex g_dataMutex;
+        extern std::vector<double> g_cachedCoreUsages;
+        std::lock_guard<std::mutex> lock(g_dataMutex);
+        coreUsages = g_cachedCoreUsages;
+    }
+
     int numCols = (numCores > 8) ? 4 : 2;
     int numRows = (numCores + numCols - 1) / numCols;
 
-    // ВЕРХНЯ ПАНЕЛЬ: СІТКА ЯДЕР
+    // ВЕРХНЯ ПАНЕЛЬ: СІТКА ЯДЕР (реальні дані)
     for (int r = 0; r < numRows; ++r) {
         for (int c = 0; c < numCols; ++c) {
             int coreIdx = c * numRows + r;
             if (coreIdx < numCores) {
-                double simulatedCoreLoad = overallCpu + (coreIdx % 3) * 2.5 - (coreIdx % 2) * 1.5;
-                if (simulatedCoreLoad < 0) simulatedCoreLoad = 0;
-                if (simulatedCoreLoad > 100) simulatedCoreLoad = 100;
-                DrawCoreBar(coreIdx, simulatedCoreLoad);
+                double coreLoad = (coreIdx < (int)coreUsages.size()) ? coreUsages[coreIdx] : 0.0;
+                DrawCoreBar(coreIdx, coreLoad);
             } else {
                 std::wcout << std::setw(28) << L" ";
             }
@@ -187,14 +194,12 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         << runningCount << L" running" << VT_CLEAR_LINE << std::endl;
 
     DrawWideBar(L"Swp", usedPageG, totalPageG, VT_FG_BRIGHT_RED);
-    std::wcout << VT_FG_BRIGHT_CYAN << L"  Load avg: " << VT_RESET;
-    std::wcout << std::fixed << std::setprecision(2) << (overallCpu / 100.0) + 0.15 << L" "
-        << (overallCpu / 100.0) + 0.08 << L" " << (overallCpu / 100.0) + 0.02
-        << VT_CLEAR_LINE << std::endl;
+    std::wcout << VT_CLEAR_LINE << std::endl;
 
-    // Uptime вирівняний під Tasks/Load avg (позиція після DrawWideBar)
-    // DrawWideBar виводить ~52 символи, тому відступ = 52
-    std::wcout << std::setw(52) << L" " << VT_FG_BRIGHT_CYAN << L"Uptime: " << VT_RESET;
+    // Uptime вирівняний під Tasks/Load avg
+    // DrawWideBar виводить: 4(label) + 1([) + 35(bars) + 13(числа+]) = 53 символи
+    std::wstring uptimePad(53, L' ');
+    std::wcout << uptimePad << VT_FG_BRIGHT_CYAN << L"  Uptime: " << VT_RESET;
     if (days > 0) std::wcout << days << L" days, ";
     std::wcout << std::setfill(L'0') << std::setw(2) << hours << L":"
         << std::setw(2) << mins << L":" << std::setw(2) << secs
