@@ -330,3 +330,43 @@ DWORD SystemManager::KillProcess(DWORD pid) {
     CloseHandle(hProcess);
     return result;
 }
+
+DWORD SystemManager::ChangeProcessPriority(DWORD pid, bool increase) {
+    HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (hProcess == NULL) return GetLastError();
+
+    // Отримуємо поточний клас пріоритету
+    DWORD currentClass = GetPriorityClass(hProcess);
+    if (currentClass == 0) {
+        DWORD err = GetLastError();
+        CloseHandle(hProcess);
+        return err;
+    }
+
+    // Порядок класів пріоритету (від низького до високого)
+    static const DWORD priorityLevels[] = {
+        IDLE_PRIORITY_CLASS,
+        BELOW_NORMAL_PRIORITY_CLASS,
+        NORMAL_PRIORITY_CLASS,
+        ABOVE_NORMAL_PRIORITY_CLASS,
+        HIGH_PRIORITY_CLASS,
+        REALTIME_PRIORITY_CLASS
+    };
+    static const int numLevels = 6;
+
+    int currentIdx = 2; // default: NORMAL
+    for (int i = 0; i < numLevels; ++i) {
+        if (priorityLevels[i] == currentClass) { currentIdx = i; break; }
+    }
+
+    int newIdx = increase ? (currentIdx + 1) : (currentIdx - 1);
+    if (newIdx < 0) newIdx = 0;
+    if (newIdx >= numLevels) newIdx = numLevels - 1;
+
+    DWORD result = 0;
+    if (!SetPriorityClass(hProcess, priorityLevels[newIdx])) {
+        result = GetLastError();
+    }
+    CloseHandle(hProcess);
+    return result;
+}
