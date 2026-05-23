@@ -216,6 +216,7 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
         do {
             ProcessInfo info = {};
             info.pid = pe.th32ProcessID;
+            info.parentPid = pe.th32ParentProcessID;
             info.name = pe.szExeFile;
             info.priority = 0;
             info.virtualMemory = 0;

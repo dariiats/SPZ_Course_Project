@@ -7,6 +7,8 @@
 #include <vector>
 #include <cmath>
 #include <mutex>
+#include <functional>
+#include <unordered_map>
 #include <conio.h>
 
 // === Virtual Terminal Sequences ===
@@ -136,6 +138,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [F3 / /]    Пошук (перехід до збігу по імені)\n"
             << L"              Повторне F3 — наступний збіг\n"
             << L"  [F4 / \\]    Фільтр (залишає лише збіги)\n"
+            << L"  [F5 / T]    Дерево процесів (вкл/викл)\n"
             << L"  [F6 / >]    Змінити напрямок сортування\n"
             << L"  [F7 / ]]    Pri+ (підвищити пріоритет)\n"
             << L"  [F8 / []    Pri- (знизити пріоритет)\n"
@@ -166,6 +169,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [F3 / /]    Search (jump to match by name)\n"
             << L"              Press F3 again — next match\n"
             << L"  [F4 / \\]    Filter (show only matches)\n"
+            << L"  [F5 / T]    Tree view (toggle)\n"
             << L"  [F6 / >]    Toggle sort direction\n"
             << L"  [F7 / ]]    Pri+ (raise process priority)\n"
             << L"  [F8 / []    Pri- (lower process priority)\n"
@@ -466,6 +470,55 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         return config.sortAscending ? (cmp < 0) : (cmp > 0);
     });
 
+    // Tree view — перебудова списку в деревоподібному порядку
+    if (config.treeView) {
+        std::unordered_map<DWORD, std::vector<int>> childrenMap;
+        std::unordered_map<DWORD, int> pidIndex;
+        for (int i = 0; i < (int)processes.size(); ++i) {
+            pidIndex[processes[i].pid] = i;
+            childrenMap[processes[i].parentPid].push_back(i);
+        }
+
+        // Знаходимо кореневі процеси (батько не в списку)
+        std::vector<int> roots;
+        for (int i = 0; i < (int)processes.size(); ++i) {
+            if (pidIndex.find(processes[i].parentPid) == pidIndex.end()) {
+                roots.push_back(i);
+            }
+        }
+
+        // DFS для побудови плоского дерева з відступами
+        struct TreeEntry { int idx; int depth; };
+        std::vector<TreeEntry> treeOrder;
+        std::function<void(int, int)> buildTree = [&](int idx, int depth) {
+            treeOrder.push_back({ idx, depth });
+            auto it = childrenMap.find(processes[idx].pid);
+            if (it != childrenMap.end()) {
+                for (int childIdx : it->second) {
+                    buildTree(childIdx, depth + 1);
+                }
+            }
+        };
+        for (int root : roots) {
+            buildTree(root, 0);
+        }
+
+        // Перебудовуємо список з відступами в імені
+        std::vector<ProcessInfo> treeProcesses;
+        treeProcesses.reserve(treeOrder.size());
+        for (const auto& entry : treeOrder) {
+            ProcessInfo p = processes[entry.idx];
+            if (entry.depth > 0) {
+                std::wstring prefix;
+                for (int d = 0; d < entry.depth - 1; ++d) prefix += L"  ";
+                prefix += L"├─";
+                p.name = prefix + p.name;
+            }
+            treeProcesses.push_back(std::move(p));
+        }
+        processes = std::move(treeProcesses);
+    }
+
     // Search (F3) — завжди тримаємо курсор на N-му збігу (після сортування)
     bool searchFound = true;
 
@@ -640,6 +693,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт  " : L"SortBy");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пошук " : L"Search");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Фільтр" : L"Filter");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F5 " << VT_BG_CYAN << VT_FG_BLACK << (config.treeView ? (config.lang == Language::Ukrainian ? L"Список" : L"List  ") : (config.lang == Language::Ukrainian ? L"Дерево" : L"Tree  "));
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"\x25B2" : L"\x25BC");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пріор+" : L"Pri+  ");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пріор-" : L"Pri-  ");

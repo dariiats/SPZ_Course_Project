@@ -166,6 +166,17 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
+        // [F5 / T] - Tree view (дерево процесів)
+        if ((GetAsyncKeyState(VK_F5) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('T') & 0x8000))) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.treeView = !config.treeView;
+            config.pageOffset = 0;
+            config.selectedRow = 0;
+            config.selectedPid = 0;
+            Sleep(250);
+        }
+
         // [F2 / S] - Меню сортування (Setup в htop)
         if ((GetAsyncKeyState(VK_F2) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState('S') & 0x8000))) {
