@@ -53,6 +53,7 @@ struct AppConfig {
     int savedSelectedRow = 0;      // Збережений виділений рядок перед Search
     DWORD selectedPid = 0;         // PID виділеного процесу (оновлюється рендером)
     DWORD pinnedPid = 0;           // PID закріпленого процесу (після пошуку/фільтру)
+    int visibleRows = 15;          // Кількість видимих рядків (оновлюється рендером)
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Pid;
     IoSortColumn ioSortColumn = IoSortColumn::Pid;

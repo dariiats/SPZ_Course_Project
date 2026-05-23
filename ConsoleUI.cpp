@@ -74,6 +74,8 @@ void ConsoleUI::InitConsole() {
     DWORD inMode = 0;
     GetConsoleMode(hIn, &inMode);
     inMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    inMode |= ENABLE_MOUSE_INPUT | ENABLE_EXTENDED_FLAGS;
+    inMode &= ~ENABLE_QUICK_EDIT_MODE;
     SetConsoleMode(hIn, inMode);
 }
 
@@ -146,6 +148,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [L]         Змінити мову (UA / EN)\n"
             << L"  [I]         Змінити інтервал (1с/3с/5с)\n"
             << L"  [Вгору/Вниз] Навігація по списку\n"
+            << L"  [Колесико]  Прокрутка списку мишкою\n"
             << L"  [<- / ->]   Гортання сторінок\n"
             << L"  [Enter]     Підтвердити вибір\n"
             << L"  [Esc]       Скасувати / скинути закріплення\n\n"
@@ -176,6 +179,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [L]         Toggle language (UA / EN)\n"
             << L"  [I]         Change interval (1s/3s/5s)\n"
             << L"  [Up/Down]   Navigate process list\n"
+            << L"  [Scroll]    Mouse wheel scrolling\n"
             << L"  [<- / ->]   Page scroll\n"
             << L"  [Enter]     Confirm selection\n"
             << L"  [Esc]       Cancel / unpin process\n\n"
@@ -237,6 +241,11 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     int numCols = (numCores > 8) ? 4 : 2;
     int numRows = (numCores + numCols - 1) / numCols;
+
+    // Кількість видимих рядків процесів (динамічно від висоти вікна)
+    int visibleRows = termHeight - numRows - 7;
+    if (visibleRows < 5) visibleRows = 5;
+    config.visibleRows = visibleRows;
 
     // ВЕРХНЯ ПАНЕЛЬ: СІТКА ЯДЕР (реальні дані)
     for (int r = 0; r < numRows; ++r) {
@@ -474,7 +483,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
             if (nameLower.find(query) == 0) {
                 if (matchCount == config.searchMatchIndex) {
-                    config.pageOffset = (i / 15) * 15;
+                    config.pageOffset = (i / visibleRows) * visibleRows;
                     config.selectedRow = i - config.pageOffset;
                     found = true;
                     break;
@@ -489,7 +498,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 std::wstring nameLower = processes[i].name;
                 std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::towlower);
                 if (nameLower.find(query) == 0) {
-                    config.pageOffset = (i / 15) * 15;
+                    config.pageOffset = (i / visibleRows) * visibleRows;
                     config.selectedRow = i - config.pageOffset;
                     found = true;
                     break;
@@ -503,7 +512,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         // Тримаємо курсор на закріпленому процесі після оновлення даних
         for (int i = 0; i < (int)processes.size(); ++i) {
             if (processes[i].pid == config.pinnedPid) {
-                config.pageOffset = (i / 15) * 15;
+                config.pageOffset = (i / visibleRows) * visibleRows;
                 config.selectedRow = i - config.pageOffset;
                 break;
             }
@@ -511,13 +520,13 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     }
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
-    if (config.selectedRow >= (std::min)(15, (int)processes.size() - config.pageOffset))
-        config.selectedRow = (std::min)(15, (int)processes.size() - config.pageOffset) - 1;
+    if (config.selectedRow >= (std::min)(visibleRows, (int)processes.size() - config.pageOffset))
+        config.selectedRow = (std::min)(visibleRows, (int)processes.size() - config.pageOffset) - 1;
     if (config.selectedRow < 0) config.selectedRow = 0;
 
     // === РЯДКИ ПРОЦЕСІВ ===
     int printedCount = 0;
-    for (int i = config.pageOffset; i < (std::min)(config.pageOffset + 15, (int)processes.size()); ++i) {
+    for (int i = config.pageOffset; i < (std::min)(config.pageOffset + visibleRows, (int)processes.size()); ++i) {
         const auto& proc = processes[i];
 
         auto formatMem = [](SIZE_T bytes) -> std::wstring {
@@ -611,7 +620,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     }
 
     // Заповнення порожніх рядків
-    while (printedCount < 15) {
+    while (printedCount < visibleRows) {
         std::wcout << VT_CLEAR_LINE << std::setw(termWidth) << L" " << std::endl;
         printedCount++;
     }
