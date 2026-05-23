@@ -362,7 +362,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             << std::setw(cmdColW) << mCmd
             << VT_CLEAR_LINE << std::endl;
     } else {
-        int fixedIOWidth = 7 + 9 + 4 + 9 + 11 + 12 + 6 + 6;
+        int fixedIOWidth = 7 + 9 + 11 + 11 + 11;
         cmdColW = termWidth - fixedIOWidth;
         if (cmdColW < 15) cmdColW = 15;
 
@@ -384,12 +384,9 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wcout << std::left
             << std::setw(7) << ioPid
             << std::setw(9) << ioUser
-            << std::setw(4) << L"IO"
-            << std::setw(9) << ioRW
+            << std::setw(11) << ioRW
             << std::setw(11) << ioRead
-            << std::setw(12) << ioWrite
-            << std::setw(6) << L"SWPD%"
-            << std::setw(6) << L"IOD%"
+            << std::setw(11) << ioWrite
             << std::setw(cmdColW) << ioCmd
             << VT_CLEAR_LINE << std::endl;
     }
@@ -590,11 +587,11 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 return buf;
             };
 
-            std::wcout << std::left << std::setw(3) << L"B7" << L" ";
+            std::wcout << std::left << std::setw(3) << L" " << L" ";
             if (!isSelected && !isPinned) std::wcout << VT_RESET;
             // DISK R/W = read + write rate
             std::wstring rw = formatIO(proc.ioDiskRead + proc.ioDiskWrite) + L"/s";
-            std::wcout << std::right << std::setw(8) << rw << L" ";
+            std::wcout << std::right << std::setw(10) << rw << L" ";
             // DISK READ rate
             if (!isSelected && !isPinned) std::wcout << VT_FG_BRIGHT_GREEN;
             std::wstring dr = formatIO(proc.ioDiskRead) + L"/s";
@@ -602,11 +599,8 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             // DISK WRITE rate
             if (!isSelected && !isPinned) std::wcout << VT_FG_BRIGHT_RED;
             std::wstring dw = formatIO(proc.ioDiskWrite) + L"/s";
-            std::wcout << std::right << std::setw(11) << dw << L" ";
+            std::wcout << std::right << std::setw(10) << dw << L" ";
             if (!isSelected && !isPinned) std::wcout << VT_RESET;
-            // SWAPIN% та IO% — не доступні через WinAPI
-            std::wcout << std::right << std::setw(5) << L"0.0" << L" ";
-            std::wcout << std::right << std::setw(5) << L"0.0" << L" ";
         }
 
         std::wcout << std::left << std::setw(cmdColW) << name;
@@ -664,14 +658,14 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
         L"M_SHARE", L"STATE", L"PERCENT_CPU", L"PERCENT_MEM", L"TIME", L"Command"
     };
     const std::wstring ioItems[] = {
-        L"PID", L"USER", L"IO_PRIORITY", L"DISK_R/W", L"DISK_READ", L"DISK_WRITE", L"Command"
+        L"PID", L"USER", L"DISK_R/W", L"DISK_READ", L"DISK_WRITE", L"Command"
     };
 
     const std::wstring* items;
     int itemCount;
     if (config.activeTab == TabView::IO) {
         items = ioItems;
-        itemCount = 7;
+        itemCount = 6;
     } else {
         items = mainItems;
         itemCount = 11;
