@@ -195,6 +195,8 @@ void InputThread(AppConfig& config) {
                 config.showSortMenu = false;
                 config.pageOffset = 0;
                 config.selectedRow = 0;
+                config.selectedPid = 0;
+                config.pinnedPid = 0;
                 g_needsCls = true;
                 Sleep(250);
             }
@@ -214,6 +216,8 @@ void InputThread(AppConfig& config) {
             config.sortAscending = !config.sortAscending;
             config.pageOffset = 0;
             config.selectedRow = 0;
+            config.selectedPid = 0;
+            config.pinnedPid = 0;
             Sleep(250);
         }
 

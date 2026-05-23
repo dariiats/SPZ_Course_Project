@@ -43,8 +43,15 @@
 int GetConsoleWidth() {
     CONSOLE_SCREEN_BUFFER_INFO csbi;
     GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    int width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    return (width > 60) ? width : 60;
+    return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+}
+
+// Отримання поточної висоти консолі
+int GetConsoleHeight() {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    int height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    return height;
 }
 
 void ConsoleUI::InitConsole() {
@@ -178,6 +185,28 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     // Переміщуємо курсор на початок і забороняємо scroll
     std::wcout << VT_CURSOR_HOME;
     int termWidth = GetConsoleWidth();
+    int termHeight = GetConsoleHeight();
+
+    // Мінімальний розмір вікна для коректного відображення
+    const int MIN_WIDTH = 80;
+    const int MIN_HEIGHT = 24;
+
+    if (termWidth < MIN_WIDTH || termHeight < MIN_HEIGHT) {
+        std::wcout << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+        std::wcout << VT_FG_BRIGHT_RED;
+        if (config.lang == Language::Ukrainian) {
+            std::wcout << L"  Вікно замале!" << VT_CLEAR_LINE << std::endl;
+            std::wcout << L"  Мінімум: " << MIN_WIDTH << L"x" << MIN_HEIGHT << VT_CLEAR_LINE << std::endl;
+            std::wcout << L"  Зараз:   " << termWidth << L"x" << termHeight << VT_CLEAR_LINE << std::endl;
+        } else {
+            std::wcout << L"  Window too small!" << VT_CLEAR_LINE << std::endl;
+            std::wcout << L"  Minimum: " << MIN_WIDTH << L"x" << MIN_HEIGHT << VT_CLEAR_LINE << std::endl;
+            std::wcout << L"  Current: " << termWidth << L"x" << termHeight << VT_CLEAR_LINE << std::endl;
+        }
+        std::wcout << VT_RESET << L"\x1b[J";
+        return;
+    }
+
     std::wstring separator(termWidth, L'-');
 
     SYSTEM_INFO sysInfo;
@@ -419,7 +448,10 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                     cmp = (a.memoryUsage > b.memoryUsage) ? 1 : (a.memoryUsage < b.memoryUsage) ? -1 : 0; break;
             }
         }
-        if (cmp == 0) return false; // рівні елементи — strict weak ordering
+        if (cmp == 0) {
+            // Вторинне сортування по PID для стабільності
+            return a.pid < b.pid;
+        }
         return config.sortAscending ? (cmp < 0) : (cmp > 0);
     });
 
