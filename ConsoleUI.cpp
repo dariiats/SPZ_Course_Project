@@ -496,15 +496,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 break;
             }
         }
-    } else if (config.selectedPid != 0) {
-        // Тримаємо курсор на тому ж процесі по PID при оновленні списку
-        for (int i = 0; i < (int)processes.size(); ++i) {
-            if (processes[i].pid == config.selectedPid) {
-                config.pageOffset = (i / 15) * 15;
-                config.selectedRow = i - config.pageOffset;
-                break;
-            }
-        }
     }
 
     if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
@@ -587,7 +578,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 return buf;
             };
 
-            std::wcout << std::left << std::setw(3) << L" " << L" ";
             if (!isSelected && !isPinned) std::wcout << VT_RESET;
             // DISK R/W = read + write rate
             std::wstring rw = formatIO(proc.ioDiskRead + proc.ioDiskWrite) + L"/s";
