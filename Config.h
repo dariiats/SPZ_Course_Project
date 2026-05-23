@@ -30,7 +30,6 @@ enum class SortColumn {
 enum class IoSortColumn {
     Pid,
     User,
-    IoPriority,
     DiskRW,
     DiskRead,
     DiskWrite,
