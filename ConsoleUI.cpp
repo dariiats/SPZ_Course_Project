@@ -136,8 +136,8 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"               Повторне F3 — наступний збіг\n"
             << L"  [F4]       - Фільтр (залишає лише збіги)\n"
             << L"  [F6]       - Змінити напрямок сортування\n"
-            << L"  [F7]       - Nice- (підвищити пріоритет)\n"
-            << L"  [F8]       - Nice+ (знизити пріоритет)\n"
+            << L"  [F7]       - Pri+ (підвищити пріоритет)\n"
+            << L"  [F8]       - Pri- (знизити пріоритет)\n"
             << L"  [F9]       - Завершити процес за PID\n"
             << L"  [F10]      - Вихід з програми\n"
             << L"  [Tab]      - Перемикання вкладок (Main / IO)\n"
@@ -161,8 +161,8 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"               Press F3 again — next match\n"
             << L"  [F4]       - Filter (show only matches)\n"
             << L"  [F6]       - Toggle sort direction\n"
-            << L"  [F7]       - Nice- (raise priority)\n"
-            << L"  [F8]       - Nice+ (lower priority)\n"
+            << L"  [F7]       - Pri+ (raise priority)\n"
+            << L"  [F8]       - Pri- (lower priority)\n"
             << L"  [F9]       - Kill process by PID\n"
             << L"  [F10]      - Quit\n"
             << L"  [Tab]      - Switch tab (Main / IO)\n"
@@ -323,12 +323,12 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     int cmdColW;
     if (config.activeTab == TabView::Main) {
-        int fixedColsWidth = 7 + 9 + 4 + 4 + 7 + 7 + 7 + 2 + 6 + 6 + 10;
+        int fixedColsWidth = 7 + 9 + 4 + 7 + 7 + 7 + 2 + 6 + 6 + 10;
         cmdColW = termWidth - fixedColsWidth;
         if (cmdColW < 15) cmdColW = 15;
 
         // Маркер сортування
-        std::wstring mPid = L"  PID", mUser = L"USER", mPri = L"PRI", mNi = L"NI",
+        std::wstring mPid = L"  PID", mUser = L"USER", mPri = L"PRI",
                      mVirt = L"VIRT", mRes = L"RES", mShr = L"SHR", mState = L"S",
                      mCpu = L"CPU%", mMem = L"MEM%", mTime = L"TIME+",
                      mCmd = (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"COMMAND");
@@ -337,7 +337,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             case SortColumn::Pid:        mPid = std::wstring(L" PID") + arrow; break;
             case SortColumn::User:       mUser = std::wstring(L"USER") + arrow; break;
             case SortColumn::Priority:   mPri = std::wstring(L"PRI") + arrow; break;
-            case SortColumn::Nice:       mNi = std::wstring(L"NI") + arrow; break;
             case SortColumn::Virt:       mVirt = std::wstring(L"VIRT") + arrow; break;
             case SortColumn::Res:        mRes = std::wstring(L"RES") + arrow; break;
             case SortColumn::Shr:        mShr = std::wstring(L"SHR") + arrow; break;
@@ -346,13 +345,13 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             case SortColumn::MemPercent: mMem = std::wstring(L"MEM") + arrow; break;
             case SortColumn::Time:       mTime = std::wstring(L"TIME") + arrow; break;
             case SortColumn::Command:    mCmd = arrow + (config.lang == Language::Ukrainian ? std::wstring(L"КОМАНДА") : std::wstring(L"COMMAND")); break;
+            default: break;
         }
 
         std::wcout << std::left
             << std::setw(7) << mPid
             << std::setw(9) << mUser
             << std::setw(4) << mPri
-            << std::setw(4) << mNi
             << std::setw(7) << mVirt
             << std::setw(7) << mRes
             << std::setw(7) << mShr
@@ -425,9 +424,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 case SortColumn::User:
                     cmp = (a.userName < b.userName) ? 1 : (a.userName > b.userName) ? -1 : 0; break;
                 case SortColumn::Priority:
-                    cmp = (a.priority < b.priority) ? 1 : (a.priority > b.priority) ? -1 : 0; break;
-                case SortColumn::Nice:
-                    cmp = (a.niceness < b.niceness) ? 1 : (a.niceness > b.niceness) ? -1 : 0; break;
+                    cmp = (a.priority > b.priority) ? 1 : (a.priority < b.priority) ? -1 : 0; break;
                 case SortColumn::Virt:
                     cmp = (a.virtualMemory > b.virtualMemory) ? 1 : (a.virtualMemory < b.virtualMemory) ? -1 : 0; break;
                 case SortColumn::Res:
@@ -569,7 +566,6 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
         if (config.activeTab == TabView::Main) {
             std::wcout << std::right << std::setw(3) << proc.priority << L" ";
-            std::wcout << std::right << std::setw(3) << proc.niceness << L" ";
             std::wcout << std::right << std::setw(6) << formatMem(proc.virtualMemory) << L" ";
             if (!isSelected && !isPinned) std::wcout << VT_FG_BRIGHT_GREEN;
             std::wcout << std::right << std::setw(6) << formatMem(proc.memoryUsage) << L" ";
@@ -644,8 +640,8 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пошук " : L"Search");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Фільтр" : L"Filter");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"\x25B2" : L"\x25BC");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << L"Nice-";
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << L"Nice+";
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << L"Pri+";
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << L"Pri-";
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << L"Kill ";
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L"F10 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вихід" : L"Quit ");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка" : L"Tab   ");
@@ -664,7 +660,7 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
     int termWidth = GetConsoleWidth();
 
     const std::wstring mainItems[] = {
-        L"PID", L"USER", L"PRIORITY", L"NICE", L"M_VIRT", L"M_RESIDENT",
+        L"PID", L"USER", L"PRIORITY", L"M_VIRT", L"M_RESIDENT",
         L"M_SHARE", L"STATE", L"PERCENT_CPU", L"PERCENT_MEM", L"TIME", L"Command"
     };
     const std::wstring ioItems[] = {
@@ -678,7 +674,7 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
         itemCount = 7;
     } else {
         items = mainItems;
-        itemCount = 12;
+        itemCount = 11;
     }
 
     // Заголовок

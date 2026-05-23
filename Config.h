@@ -17,7 +17,6 @@ enum class SortColumn {
     Pid,
     User,
     Priority,
-    Nice,
     Virt,
     Res,
     Shr,

@@ -165,7 +165,7 @@ void InputThread(AppConfig& config) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showSortMenu = !config.showSortMenu;
             if (config.showSortMenu) {
-                int maxIdx = (config.activeTab == TabView::IO) ? 6 : 11;
+                int maxIdx = (config.activeTab == TabView::IO) ? 6 : 10;
                 if (config.sortMenuIndex > maxIdx) config.sortMenuIndex = 0;
                 g_needsCls = true;
             }
@@ -181,7 +181,7 @@ void InputThread(AppConfig& config) {
             }
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                int maxIdx = (config.activeTab == TabView::IO) ? 6 : 11;
+                int maxIdx = (config.activeTab == TabView::IO) ? 6 : 10;
                 if (config.sortMenuIndex < maxIdx) config.sortMenuIndex++;
                 Sleep(150);
             }

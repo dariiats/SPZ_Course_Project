@@ -212,7 +212,6 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
             info.pid = pe.th32ProcessID;
             info.name = pe.szExeFile;
             info.priority = 0;
-            info.niceness = 0;
             info.virtualMemory = 0;
             info.memoryUsage = 0;
             info.sharedMemory = 0;
@@ -237,16 +236,16 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                         ? (pmc.WorkingSetSize - pmc.PrivateUsage) : 0;
                 }
 
-                // Priority
-                info.priority = GetPriorityClass(hProcess);
-                switch (info.priority) {
-                    case REALTIME_PRIORITY_CLASS: info.priority = -20; info.niceness = -20; break;
-                    case HIGH_PRIORITY_CLASS: info.priority = -10; info.niceness = -10; break;
-                    case ABOVE_NORMAL_PRIORITY_CLASS: info.priority = -5; info.niceness = -5; break;
-                    case NORMAL_PRIORITY_CLASS: info.priority = 20; info.niceness = 0; break;
-                    case BELOW_NORMAL_PRIORITY_CLASS: info.priority = 30; info.niceness = 10; break;
-                    case IDLE_PRIORITY_CLASS: info.priority = 39; info.niceness = 19; break;
-                    default: info.priority = 20; info.niceness = 0; break;
+                // Priority — реальний Windows base priority
+                DWORD priClass = GetPriorityClass(hProcess);
+                switch (priClass) {
+                    case REALTIME_PRIORITY_CLASS:       info.priority = 24; break;
+                    case HIGH_PRIORITY_CLASS:           info.priority = 13; break;
+                    case ABOVE_NORMAL_PRIORITY_CLASS:   info.priority = 10; break;
+                    case NORMAL_PRIORITY_CLASS:         info.priority = 8;  break;
+                    case BELOW_NORMAL_PRIORITY_CLASS:   info.priority = 6;  break;
+                    case IDLE_PRIORITY_CLASS:           info.priority = 4;  break;
+                    default:                           info.priority = 8;  break;
                 }
 
                 // CPU time + per-process CPU%
