@@ -130,55 +130,67 @@ void ConsoleUI::RenderHelp(Language lang) {
         << std::setw(w - 15) << L" " << std::endl;
     if (lang == Language::Ukrainian) {
         std::wcout << VT_RESET
-            << L"  [F1]       - Відкрити/закрити довідку\n"
-            << L"  [F2]       - Меню сортування\n"
-            << L"  [F3]       - Пошук процесу (перехід до збігу)\n"
-            << L"               Повторне F3 — наступний збіг\n"
-            << L"  [F4]       - Фільтр (залишає лише збіги)\n"
-            << L"  [F6]       - Змінити напрямок сортування\n"
-            << L"  [F7]       - Pri+ (підвищити пріоритет)\n"
-            << L"  [F8]       - Pri- (знизити пріоритет)\n"
-            << L"  [F9]       - Завершити процес за PID\n"
-            << L"  [F10]      - Вихід з програми\n"
-            << L"  [Tab]      - Перемикання вкладок (Main / IO)\n"
-            << L"  [L]        - Змінити мову (UA / EN)\n"
-            << L"  [I]        - Змінити інтервал оновлення\n"
-            << L"  [Вгору/Вниз] - Виділити процес\n"
-            << L"  [<- / ->]  - Гортання сторінок\n"
-            << L"  [Enter]    - Підтвердити (закріпити процес)\n"
-            << L"  [Esc]      - Скасувати пошук/фільтр або\n"
-            << L"               скинути закріплення (жовтий)\n\n"
-            << L"  Закріплення: після Enter в пошуку/фільтрі\n"
-            << L"  процес виділяється жовтим. Курсор тримається\n"
-            << L"  на ньому при оновленні. Скинути: Esc або\n"
-            << L"  стрілки.\n\n"
-            << L" Натисніть [F1] щоб повернутись...";
+            << VT_FG_BRIGHT_CYAN << L" Клавіші:" << VT_RESET << L"\n"
+            << L"  [F1]        Відкрити/закрити довідку\n"
+            << L"  [F2]        Меню сортування (вибір колонки)\n"
+            << L"  [F3]        Пошук (перехід до збігу по імені)\n"
+            << L"              Повторне F3 — наступний збіг\n"
+            << L"  [F4]        Фільтр (залишає лише збіги)\n"
+            << L"  [F6]        Змінити напрямок сортування\n"
+            << L"  [F7]        Pri+ (підвищити пріоритет процесу)\n"
+            << L"  [F8]        Pri- (знизити пріоритет процесу)\n"
+            << L"  [F9]        Kill (меню завершення процесу)\n"
+            << L"  [F10]       Вихід з програми\n"
+            << L"  [Tab]       Перемикання вкладок (Main / IO)\n"
+            << L"  [Space]     Закріпити/відкріпити процес\n"
+            << L"  [L]         Змінити мову (UA / EN)\n"
+            << L"  [I]         Змінити інтервал (1с/3с/5с)\n"
+            << L"  [Вгору/Вниз] Навігація по списку\n"
+            << L"  [<- / ->]   Гортання сторінок\n"
+            << L"  [Enter]     Підтвердити вибір\n"
+            << L"  [Esc]       Скасувати / скинути закріплення\n\n"
+            << VT_FG_BRIGHT_CYAN << L" Закріплення (жовтий):" << VT_RESET << L"\n"
+            << L"  Space або Enter в пошуку/фільтрі закріплює\n"
+            << L"  процес. Курсор тримається на ньому при\n"
+            << L"  оновленні списку. Скинути: Esc.\n\n"
+            << VT_FG_BRIGHT_CYAN << L" Kill (F9):" << VT_RESET << L"\n"
+            << L"  Завершує процес під курсором. Меню:\n"
+            << L"  TERMINATE — жорстке завершення\n"
+            << L"  WM_CLOSE  — м'яке (закриття вікон)\n\n"
+            << VT_FG_DARKGRAY << L" Натисніть [F1] щоб повернутись..." << VT_RESET;
     } else {
         std::wcout << VT_RESET
-            << L"  [F1]       - Close/open this help window\n"
-            << L"  [F2]       - Sort menu\n"
-            << L"  [F3]       - Search (jump to match)\n"
-            << L"               Press F3 again — next match\n"
-            << L"  [F4]       - Filter (show only matches)\n"
-            << L"  [F6]       - Toggle sort direction\n"
-            << L"  [F7]       - Pri+ (raise priority)\n"
-            << L"  [F8]       - Pri- (lower priority)\n"
-            << L"  [F9]       - Kill process by PID\n"
-            << L"  [F10]      - Quit\n"
-            << L"  [Tab]      - Switch tab (Main / IO)\n"
-            << L"  [L]        - Toggle language (UA / EN)\n"
-            << L"  [I]        - Change refresh interval\n"
-            << L"  [Up/Down]  - Select process\n"
-            << L"  [<- / ->]  - Page scroll\n"
-            << L"  [Enter]    - Confirm (pin process)\n"
-            << L"  [Esc]      - Cancel search/filter or\n"
-            << L"               unpin process (yellow)\n\n"
-            << L"  Pinning: after Enter in search/filter the\n"
-            << L"  process is highlighted yellow. Cursor stays\n"
-            << L"  on it during refresh. Reset: Esc or arrows.\n\n"
-            << L" Press [F1] to return...";
+            << VT_FG_BRIGHT_CYAN << L" Keys:" << VT_RESET << L"\n"
+            << L"  [F1]        Open/close this help\n"
+            << L"  [F2]        Sort menu (choose column)\n"
+            << L"  [F3]        Search (jump to match by name)\n"
+            << L"              Press F3 again — next match\n"
+            << L"  [F4]        Filter (show only matches)\n"
+            << L"  [F6]        Toggle sort direction\n"
+            << L"  [F7]        Pri+ (raise process priority)\n"
+            << L"  [F8]        Pri- (lower process priority)\n"
+            << L"  [F9]        Kill (process termination menu)\n"
+            << L"  [F10]       Quit\n"
+            << L"  [Tab]       Switch tab (Main / IO)\n"
+            << L"  [Space]     Pin/unpin process\n"
+            << L"  [L]         Toggle language (UA / EN)\n"
+            << L"  [I]         Change interval (1s/3s/5s)\n"
+            << L"  [Up/Down]   Navigate process list\n"
+            << L"  [<- / ->]   Page scroll\n"
+            << L"  [Enter]     Confirm selection\n"
+            << L"  [Esc]       Cancel / unpin process\n\n"
+            << VT_FG_BRIGHT_CYAN << L" Pinning (yellow):" << VT_RESET << L"\n"
+            << L"  Space or Enter in search/filter pins a\n"
+            << L"  process. Cursor stays on it during list\n"
+            << L"  refresh. Reset: Esc.\n\n"
+            << VT_FG_BRIGHT_CYAN << L" Kill (F9):" << VT_RESET << L"\n"
+            << L"  Terminates process under cursor. Menu:\n"
+            << L"  TERMINATE — force kill (immediate)\n"
+            << L"  WM_CLOSE  — graceful (close windows)\n\n"
+            << VT_FG_DARKGRAY << L" Press [F1] to return..." << VT_RESET;
     }
-    for (int i = 0; i < 10; i++) std::wcout << std::setw(w) << L" " << std::endl;
+    for (int i = 0; i < 5; i++) std::wcout << VT_CLEAR_LINE << L"\n";
+    std::wcout << L"\x1b[J";
 }
 
 void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
@@ -620,20 +632,20 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             << VT_RESET << VT_CLEAR_LINE;
     } else {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F1 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Довідка" : L"Help  ");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт " : L"SortBy");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F2 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Сорт  " : L"SortBy");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пошук " : L"Search");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Фільтр" : L"Filter");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"\x25B2" : L"\x25BC");
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << L"Pri+";
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << L"Pri-";
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << L"Kill ";
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L"F10 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вихід" : L"Quit ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пріор+" : L"Pri+  ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пріор-" : L"Pri-  ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш" : L"Kill  ");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L"F10 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вихід " : L"Quit  ");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" Tab" << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Вкладка" : L"Tab   ");
         // Інфо справа: мова та інтервал
         std::wcout << VT_RESET << VT_FG_DARKGRAY << L" [L]"
             << VT_FG_BRIGHT_CYAN << (config.lang == Language::Ukrainian ? L"UA" : L"EN")
             << VT_FG_DARKGRAY << L" [I]"
-            << VT_FG_BRIGHT_CYAN << (config.refreshInterval / 1000) << L"s";
+            << VT_FG_BRIGHT_CYAN << (config.refreshInterval / 1000) << (config.lang == Language::Ukrainian ? L"с" : L"s");
         std::wcout << VT_RESET << VT_CLEAR_LINE;
     }
     std::wcout << L"\x1b[J";
@@ -692,42 +704,13 @@ void ConsoleUI::RenderSortMenu(AppConfig& config) {
 }
 
 void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
-    std::wcout << VT_CURSOR_SHOW;
-
     bool ua = (config.lang == Language::Ukrainian);
-    std::wcout << VT_FG_BRIGHT_RED
-        << (ua ? L"\n[KILL] PID: " : L"\n[KILL] PID: ")
-        << VT_RESET;
+    DWORD pidToKill = config.selectedPid;
 
-    // Посимвольне читання PID з підтримкою Esc
-    std::wstring pidStr;
-    while (true) {
-        int ch = _getch();
-        if (ch == 27) { // Esc
-            std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
-            cpuMon.Reset();
-            return;
-        }
-        if (ch == '\r' || ch == '\n') { // Enter
-            break;
-        }
-        if (ch == '\b' || ch == 127) { // Backspace
-            if (!pidStr.empty()) {
-                pidStr.pop_back();
-                std::wcout << L"\b \b";
-            }
-            continue;
-        }
-        if (ch >= '0' && ch <= '9') {
-            pidStr += static_cast<wchar_t>(ch);
-            std::wcout << static_cast<wchar_t>(ch);
-        }
-    }
-    std::wcout << std::endl;
-
-    if (pidStr.empty()) {
+    if (pidToKill == 0) {
+        std::wcout << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
         std::wcout << VT_FG_BRIGHT_RED
-            << (ua ? L"[Помилка] PID не введено!" : L"[Error] No PID entered!")
+            << (ua ? L"\n  Процес не виділено!" : L"\n  No process selected!")
             << VT_RESET;
         Sleep(1200);
         std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
@@ -735,18 +718,80 @@ void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
         return;
     }
 
-    DWORD pidToKill = static_cast<DWORD>(std::stoul(pidStr));
+    // Меню сигналів (Windows-аналоги)
+    const int NUM_SIGNALS = 2;
+    std::wstring signals[NUM_SIGNALS] = {
+        ua ? L"TERMINATE (жорстке завершення)" : L"TERMINATE (force kill)",
+        ua ? L"WM_CLOSE  (м'яке завершення)"  : L"WM_CLOSE  (graceful close)"
+    };
+    int selected = 0;
 
-    DWORD result = SystemManager::KillProcess(pidToKill);
-    if (result == 0) {
-        std::wcout << VT_FG_BRIGHT_GREEN << LocalizationManager::GetText("success", config.lang);
-    } else if (result == ERROR_ACCESS_DENIED) {
-        std::wcout << VT_FG_BRIGHT_RED << LocalizationManager::GetText("access_denied", config.lang);
-    } else {
-        std::wcout << VT_FG_BRIGHT_RED << LocalizationManager::GetText("not_found", config.lang);
+    while (true) {
+        std::wcout << L"\x1b[2J\x1b[H";
+        std::wcout << VT_FG_BRIGHT_RED
+            << (ua ? L"  Завершити процес PID " : L"  Kill process PID ")
+            << pidToKill << VT_RESET << L"\n\n";
+
+        std::wcout << (ua ? L"  Оберіть сигнал:\n\n" : L"  Choose signal:\n\n");
+
+        for (int i = 0; i < NUM_SIGNALS; ++i) {
+            if (i == selected) {
+                std::wcout << L"  " << VT_BG_CYAN << VT_FG_BLACK << L" " << signals[i] << L" " << VT_RESET << L"\n";
+            } else {
+                std::wcout << L"   " << signals[i] << L"\n";
+            }
+        }
+
+        std::wcout << L"\n" << VT_FG_DARKGRAY
+            << (ua ? L"  [Enter] Підтвердити  [Esc] Скасувати" : L"  [Enter] Confirm  [Esc] Cancel")
+            << VT_RESET;
+
+        int ch = _getch();
+        if (ch == 27) { // Esc
+            std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+            cpuMon.Reset();
+            return;
+        }
+        if (ch == 0 || ch == 0xE0) {
+            int ext = _getch();
+            if (ext == 72) { // Up
+                if (selected > 0) selected--;
+            } else if (ext == 80) { // Down
+                if (selected < NUM_SIGNALS - 1) selected++;
+            }
+            continue;
+        }
+        if (ch == '\r' || ch == '\n') {
+            break;
+        }
     }
 
-    Sleep(1200);
-    std::wcout << VT_RESET << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+    // Виконання
+    DWORD result = 0;
+    if (selected == 0) {
+        // TERMINATE — жорстке завершення
+        result = SystemManager::KillProcess(pidToKill);
+    } else {
+        // WM_CLOSE — м'яке завершення (закрити всі вікна процесу)
+        result = SystemManager::CloseProcess(pidToKill);
+    }
+
+    std::wcout << L"\x1b[2J\x1b[H";
+    if (result == 0) {
+        std::wcout << VT_FG_BRIGHT_GREEN
+            << (ua ? L"\n  Успішно завершено! PID: " : L"\n  Successfully killed! PID: ")
+            << pidToKill << VT_RESET;
+    } else if (result == ERROR_ACCESS_DENIED) {
+        std::wcout << VT_FG_BRIGHT_RED
+            << (ua ? L"\n  Відмовлено в доступі! PID: " : L"\n  Access denied! PID: ")
+            << pidToKill << VT_RESET;
+    } else {
+        std::wcout << VT_FG_BRIGHT_RED
+            << (ua ? L"\n  Помилка завершення! PID: " : L"\n  Failed to kill! PID: ")
+            << pidToKill << VT_RESET;
+    }
+
+    Sleep(1500);
+    std::wcout << VT_CURSOR_HIDE << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
     cpuMon.Reset();
 }

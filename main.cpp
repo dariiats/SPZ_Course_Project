@@ -255,13 +255,21 @@ void InputThread(AppConfig& config) {
             break;
         }
 
-        // Введення тексту пошуку (не потрібно — обробляється вище)
+        // [Space] - Закріпити/відкріпити процес під курсором
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_SPACE) & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            if (config.pinnedPid == config.selectedPid) {
+                config.pinnedPid = 0; // відкріпити
+            } else {
+                config.pinnedPid = config.selectedPid; // закріпити
+            }
+            Sleep(250);
+        }
 
         // Стрілки — виділення та гортання
         if (!config.showHelp && !config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.pinnedPid = 0;
                 config.selectedPid = 0;
                 if (config.selectedRow > 0) {
                     config.selectedRow--;
@@ -272,14 +280,12 @@ void InputThread(AppConfig& config) {
             }
             if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.pinnedPid = 0;
                 config.selectedPid = 0;
                 config.selectedRow++;
                 Sleep(120);
             }
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.pinnedPid = 0;
                 config.selectedPid = 0;
                 config.pageOffset += 15;
                 config.selectedRow = 0;
@@ -287,7 +293,6 @@ void InputThread(AppConfig& config) {
             }
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
-                config.pinnedPid = 0;
                 config.selectedPid = 0;
                 if (config.pageOffset >= 15) {
                     config.pageOffset -= 15;

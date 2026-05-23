@@ -332,6 +332,21 @@ DWORD SystemManager::KillProcess(DWORD pid) {
     return result;
 }
 
+// М'яке завершення — надсилає WM_CLOSE всім вікнам процесу
+static BOOL CALLBACK EnumWindowsCloseProc(HWND hwnd, LPARAM lParam) {
+    DWORD windowPid = 0;
+    GetWindowThreadProcessId(hwnd, &windowPid);
+    if (windowPid == (DWORD)lParam) {
+        PostMessage(hwnd, WM_CLOSE, 0, 0);
+    }
+    return TRUE;
+}
+
+DWORD SystemManager::CloseProcess(DWORD pid) {
+    EnumWindows(EnumWindowsCloseProc, (LPARAM)pid);
+    return 0;
+}
+
 DWORD SystemManager::ChangeProcessPriority(DWORD pid, bool increase) {
     HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == NULL) return GetLastError();
