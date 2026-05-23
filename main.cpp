@@ -32,8 +32,9 @@ void InputThread(AppConfig& config) {
             Sleep(50);
             continue;
         }
-        // [F1] - Довідка
-        if (GetAsyncKeyState(VK_F1) & 0x8000) {
+        // [F1 / H] - Довідка
+        if ((GetAsyncKeyState(VK_F1) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('H') & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showHelp = !config.showHelp;
             g_needsCls = true;
@@ -65,8 +66,9 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F3] - Search (перехід до збігу без фільтрації)
-        if (GetAsyncKeyState(VK_F3) & 0x8000) {
+        // [F3 / /] - Search (перехід до збігу без фільтрації)
+        if ((GetAsyncKeyState(VK_F3) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_2) & 0x8000))) {
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (!config.showSearch) {
@@ -86,8 +88,9 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F4] - Filter (фільтрація списку)
-        if (GetAsyncKeyState(VK_F4) & 0x8000) {
+        // [F4 / \] - Filter (фільтрація списку)
+        if ((GetAsyncKeyState(VK_F4) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_5) & 0x8000))) {
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (!config.showFilter) {
@@ -163,8 +166,9 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F2] - Меню сортування (Setup в htop)
-        if (GetAsyncKeyState(VK_F2) & 0x8000) {
+        // [F2 / S] - Меню сортування (Setup в htop)
+        if ((GetAsyncKeyState(VK_F2) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('S') & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.showSortMenu = !config.showSortMenu;
             if (config.showSortMenu) {
@@ -213,8 +217,9 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F6] - Інвертувати сортування (SortBy в htop)
-        if (GetAsyncKeyState(VK_F6) & 0x8000) {
+        // [F6 / >] - Інвертувати сортування (SortBy в htop)
+        if ((GetAsyncKeyState(VK_F6) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.sortAscending = !config.sortAscending;
             config.pageOffset = 0;
@@ -224,8 +229,9 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F7] - Nice- (підвищити пріоритет виділеного процесу)
-        if (GetAsyncKeyState(VK_F7) & 0x8000) {
+        // [F7 / ]] - Pri+ (підвищити пріоритет виділеного процесу)
+        if ((GetAsyncKeyState(VK_F7) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_6) & 0x8000))) {
             DWORD targetPid = 0;
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -237,8 +243,9 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F8] - Nice+ (знизити пріоритет виділеного процесу)
-        if (GetAsyncKeyState(VK_F8) & 0x8000) {
+        // [F8 / [] - Pri- (знизити пріоритет виділеного процесу)
+        if ((GetAsyncKeyState(VK_F8) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_4) & 0x8000))) {
             DWORD targetPid = 0;
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -250,8 +257,9 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F10] - Quit (вихід)
-        if (GetAsyncKeyState(VK_F10) & 0x8000) {
+        // [F10 / Q] - Quit (вихід)
+        if ((GetAsyncKeyState(VK_F10) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('Q') & 0x8000))) {
             g_running = false;
             break;
         }
@@ -303,56 +311,6 @@ void InputThread(AppConfig& config) {
             }
         }
 
-        // Колесико миші — прокрутка списку
-        {
-            HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
-            DWORD numEvents = 0;
-            GetNumberOfConsoleInputEvents(hIn, &numEvents);
-            if (numEvents > 0) {
-                std::vector<INPUT_RECORD> records(numEvents);
-                DWORD eventsRead = 0;
-                PeekConsoleInput(hIn, records.data(), numEvents, &eventsRead);
-                for (DWORD e = 0; e < eventsRead; ++e) {
-                    if (records[e].EventType == MOUSE_EVENT &&
-                        (records[e].Event.MouseEvent.dwEventFlags & MOUSE_WHEELED)) {
-                        // Прочитати і видалити подію
-                        ReadConsoleInput(hIn, records.data(), numEvents, &eventsRead);
-                        short delta = HIWORD(records[e].Event.MouseEvent.dwButtonState);
-                        std::lock_guard<std::mutex> lock(g_configMutex);
-                        if (delta > 0) {
-                            // Вгору
-                            if (config.selectedRow > 0) config.selectedRow--;
-                            else if (config.pageOffset > 0) config.pageOffset--;
-                        } else {
-                            // Вниз
-                            config.selectedRow++;
-                        }
-                        config.selectedPid = 0;
-                        break;
-                    }
-                }
-                // Видаляємо інші mouse events щоб не накопичувались
-                if (numEvents > 0) {
-                    INPUT_RECORD dummy[64];
-                    DWORD read;
-                    while (true) {
-                        GetNumberOfConsoleInputEvents(hIn, &numEvents);
-                        if (numEvents == 0) break;
-                        PeekConsoleInput(hIn, dummy, (std::min)((DWORD)64, numEvents), &read);
-                        bool hasMouseOnly = true;
-                        for (DWORD i = 0; i < read; ++i) {
-                            if (dummy[i].EventType != MOUSE_EVENT) { hasMouseOnly = false; break; }
-                        }
-                        if (hasMouseOnly) {
-                            ReadConsoleInput(hIn, dummy, read, &read);
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
         // [Esc] - Скинути пін і повернутись на початок списку
         if (!config.showSearch && !config.showFilter && !config.showSortMenu && (GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -363,8 +321,9 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F9] - Kill
-        if (GetAsyncKeyState(VK_F9) & 0x8000) {
+        // [F9 / K] - Kill
+        if ((GetAsyncKeyState(VK_F9) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('K') & 0x8000))) {
             g_killRequested = true;
             Sleep(250);
         }
