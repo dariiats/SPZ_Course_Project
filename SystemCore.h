@@ -12,8 +12,7 @@ struct ProcessInfo {
     SIZE_T memoryUsage;      // RES (Working Set)
     SIZE_T virtualMemory;    // VIRT
     SIZE_T sharedMemory;     // SHR
-    int priority;            // PRI
-    int niceness;            // NI
+    int priority;            // PRI (Windows base priority)
     double cpuPercent;       // CPU%
     double memPercent;       // MEM%
     ULONGLONG cpuTime;       // TIME+ (in milliseconds)
