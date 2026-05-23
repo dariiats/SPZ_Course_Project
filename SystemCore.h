@@ -7,6 +7,7 @@
 
 struct ProcessInfo {
     DWORD pid;
+    DWORD parentPid;             // PPID для tree view
     std::wstring name;
     std::wstring userName;
     SIZE_T memoryUsage;      // RES (Working Set)
