@@ -198,6 +198,12 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
 
     ULONGLONG systemTimeDelta = curSystemTime - prevSystemTime_;
 
+    // Wall clock delta для IO rate (в мілісекундах)
+    static ULONGLONG prevWallClock = 0;
+    ULONGLONG curWallClock = GetTickCount64();
+    double wallDeltaSec = (prevWallClock > 0) ? (curWallClock - prevWallClock) / 1000.0 : 0.0;
+    prevWallClock = curWallClock;
+
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     int numCores = si.dwNumberOfProcessors;
@@ -287,17 +293,13 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                     info.ioReadBytes = ioCounters.ReadTransferCount;
                     info.ioWriteBytes = ioCounters.WriteTransferCount;
 
-                    // Rate = (current - previous) / deltaTime
+                    // Rate = (current - previous) / wallClockDelta
                     auto ioIt = prevIoMap_.find(pe.th32ProcessID);
-                    if (ioIt != prevIoMap_.end() && prevSystemTime_ > 0 && systemTimeDelta > 0) {
-                        // systemTimeDelta в 100ns units, конвертуємо в секунди
-                        double deltaSec = static_cast<double>(systemTimeDelta) / 10000000.0;
-                        if (deltaSec > 0.0) {
-                            ULONGLONG readDelta = ioCounters.ReadTransferCount - ioIt->second.readBytes;
-                            ULONGLONG writeDelta = ioCounters.WriteTransferCount - ioIt->second.writeBytes;
-                            info.ioDiskRead = static_cast<ULONGLONG>(readDelta / deltaSec);
-                            info.ioDiskWrite = static_cast<ULONGLONG>(writeDelta / deltaSec);
-                        }
+                    if (ioIt != prevIoMap_.end() && wallDeltaSec > 0.0) {
+                        ULONGLONG readDelta = ioCounters.ReadTransferCount - ioIt->second.readBytes;
+                        ULONGLONG writeDelta = ioCounters.WriteTransferCount - ioIt->second.writeBytes;
+                        info.ioDiskRead = static_cast<ULONGLONG>(readDelta / wallDeltaSec);
+                        info.ioDiskWrite = static_cast<ULONGLONG>(writeDelta / wallDeltaSec);
                     } else {
                         info.ioDiskRead = 0;
                         info.ioDiskWrite = 0;

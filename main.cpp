@@ -58,6 +58,8 @@ void InputThread(AppConfig& config) {
             config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
             config.pageOffset = 0;
             config.selectedRow = 0;
+            config.selectedPid = 0;
+            config.pinnedPid = 0;
             g_needsCls = true;
             Sleep(250);
         }
