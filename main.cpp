@@ -5,6 +5,7 @@
 #include <mutex>
 #include <atomic>
 #include <vector>
+#include <algorithm>
 #include <conio.h>
 #include <tlhelp32.h>
 
@@ -287,18 +288,68 @@ void InputThread(AppConfig& config) {
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.selectedPid = 0;
-                config.pageOffset += 15;
+                config.pageOffset += config.visibleRows;
                 config.selectedRow = 0;
                 Sleep(150);
             }
             if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.selectedPid = 0;
-                if (config.pageOffset >= 15) {
-                    config.pageOffset -= 15;
+                if (config.pageOffset >= config.visibleRows) {
+                    config.pageOffset -= config.visibleRows;
                     config.selectedRow = 0;
                 }
                 Sleep(150);
+            }
+        }
+
+        // Колесико миші — прокрутка списку
+        {
+            HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+            DWORD numEvents = 0;
+            GetNumberOfConsoleInputEvents(hIn, &numEvents);
+            if (numEvents > 0) {
+                std::vector<INPUT_RECORD> records(numEvents);
+                DWORD eventsRead = 0;
+                PeekConsoleInput(hIn, records.data(), numEvents, &eventsRead);
+                for (DWORD e = 0; e < eventsRead; ++e) {
+                    if (records[e].EventType == MOUSE_EVENT &&
+                        (records[e].Event.MouseEvent.dwEventFlags & MOUSE_WHEELED)) {
+                        // Прочитати і видалити подію
+                        ReadConsoleInput(hIn, records.data(), numEvents, &eventsRead);
+                        short delta = HIWORD(records[e].Event.MouseEvent.dwButtonState);
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        if (delta > 0) {
+                            // Вгору
+                            if (config.selectedRow > 0) config.selectedRow--;
+                            else if (config.pageOffset > 0) config.pageOffset--;
+                        } else {
+                            // Вниз
+                            config.selectedRow++;
+                        }
+                        config.selectedPid = 0;
+                        break;
+                    }
+                }
+                // Видаляємо інші mouse events щоб не накопичувались
+                if (numEvents > 0) {
+                    INPUT_RECORD dummy[64];
+                    DWORD read;
+                    while (true) {
+                        GetNumberOfConsoleInputEvents(hIn, &numEvents);
+                        if (numEvents == 0) break;
+                        PeekConsoleInput(hIn, dummy, (std::min)((DWORD)64, numEvents), &read);
+                        bool hasMouseOnly = true;
+                        for (DWORD i = 0; i < read; ++i) {
+                            if (dummy[i].EventType != MOUSE_EVENT) { hasMouseOnly = false; break; }
+                        }
+                        if (hasMouseOnly) {
+                            ReadConsoleInput(hIn, dummy, read, &read);
+                        } else {
+                            break;
+                        }
+                    }
+                }
             }
         }
 
