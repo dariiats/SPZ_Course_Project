@@ -74,8 +74,6 @@ void ConsoleUI::InitConsole() {
     DWORD inMode = 0;
     GetConsoleMode(hIn, &inMode);
     inMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
-    inMode |= ENABLE_MOUSE_INPUT | ENABLE_EXTENDED_FLAGS;
-    inMode &= ~ENABLE_QUICK_EDIT_MODE;
     SetConsoleMode(hIn, inMode);
 }
 
@@ -132,23 +130,22 @@ void ConsoleUI::RenderHelp(Language lang) {
         << std::setw(w - 15) << L" " << std::endl;
     if (lang == Language::Ukrainian) {
         std::wcout << VT_RESET
-            << VT_FG_BRIGHT_CYAN << L" Клавіші:" << VT_RESET << L"\n"
-            << L"  [F1]        Відкрити/закрити довідку\n"
-            << L"  [F2]        Меню сортування (вибір колонки)\n"
-            << L"  [F3]        Пошук (перехід до збігу по імені)\n"
+            << VT_FG_BRIGHT_CYAN << L" Клавіші (F / альтернатива):" << VT_RESET << L"\n"
+            << L"  [F1 / H]    Відкрити/закрити довідку\n"
+            << L"  [F2 / S]    Меню сортування (вибір колонки)\n"
+            << L"  [F3 / /]    Пошук (перехід до збігу по імені)\n"
             << L"              Повторне F3 — наступний збіг\n"
-            << L"  [F4]        Фільтр (залишає лише збіги)\n"
-            << L"  [F6]        Змінити напрямок сортування\n"
-            << L"  [F7]        Pri+ (підвищити пріоритет процесу)\n"
-            << L"  [F8]        Pri- (знизити пріоритет процесу)\n"
-            << L"  [F9]        Kill (меню завершення процесу)\n"
-            << L"  [F10]       Вихід з програми\n"
+            << L"  [F4 / \\]    Фільтр (залишає лише збіги)\n"
+            << L"  [F6 / >]    Змінити напрямок сортування\n"
+            << L"  [F7 / ]]    Pri+ (підвищити пріоритет)\n"
+            << L"  [F8 / []    Pri- (знизити пріоритет)\n"
+            << L"  [F9 / K]    Kill (меню завершення процесу)\n"
+            << L"  [F10 / Q]   Вихід з програми\n"
             << L"  [Tab]       Перемикання вкладок (Main / IO)\n"
             << L"  [Space]     Закріпити/відкріпити процес\n"
             << L"  [L]         Змінити мову (UA / EN)\n"
             << L"  [I]         Змінити інтервал (1с/3с/5с)\n"
             << L"  [Вгору/Вниз] Навігація по списку\n"
-            << L"  [Колесико]  Прокрутка списку мишкою\n"
             << L"  [<- / ->]   Гортання сторінок\n"
             << L"  [Enter]     Підтвердити вибір\n"
             << L"  [Esc]       Скасувати / скинути закріплення\n\n"
@@ -156,30 +153,29 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  Space або Enter в пошуку/фільтрі закріплює\n"
             << L"  процес. Курсор тримається на ньому при\n"
             << L"  оновленні списку. Скинути: Esc.\n\n"
-            << VT_FG_BRIGHT_CYAN << L" Kill (F9):" << VT_RESET << L"\n"
+            << VT_FG_BRIGHT_CYAN << L" Kill (F9/K):" << VT_RESET << L"\n"
             << L"  Завершує процес під курсором. Меню:\n"
             << L"  TERMINATE — жорстке завершення\n"
             << L"  WM_CLOSE  — м'яке (закриття вікон)\n\n"
             << VT_FG_DARKGRAY << L" Натисніть [F1] щоб повернутись..." << VT_RESET;
     } else {
         std::wcout << VT_RESET
-            << VT_FG_BRIGHT_CYAN << L" Keys:" << VT_RESET << L"\n"
-            << L"  [F1]        Open/close this help\n"
-            << L"  [F2]        Sort menu (choose column)\n"
-            << L"  [F3]        Search (jump to match by name)\n"
+            << VT_FG_BRIGHT_CYAN << L" Keys (F / alternative):" << VT_RESET << L"\n"
+            << L"  [F1 / H]    Open/close this help\n"
+            << L"  [F2 / S]    Sort menu (choose column)\n"
+            << L"  [F3 / /]    Search (jump to match by name)\n"
             << L"              Press F3 again — next match\n"
-            << L"  [F4]        Filter (show only matches)\n"
-            << L"  [F6]        Toggle sort direction\n"
-            << L"  [F7]        Pri+ (raise process priority)\n"
-            << L"  [F8]        Pri- (lower process priority)\n"
-            << L"  [F9]        Kill (process termination menu)\n"
-            << L"  [F10]       Quit\n"
+            << L"  [F4 / \\]    Filter (show only matches)\n"
+            << L"  [F6 / >]    Toggle sort direction\n"
+            << L"  [F7 / ]]    Pri+ (raise process priority)\n"
+            << L"  [F8 / []    Pri- (lower process priority)\n"
+            << L"  [F9 / K]    Kill (process termination menu)\n"
+            << L"  [F10 / Q]   Quit\n"
             << L"  [Tab]       Switch tab (Main / IO)\n"
             << L"  [Space]     Pin/unpin process\n"
             << L"  [L]         Toggle language (UA / EN)\n"
             << L"  [I]         Change interval (1s/3s/5s)\n"
             << L"  [Up/Down]   Navigate process list\n"
-            << L"  [Scroll]    Mouse wheel scrolling\n"
             << L"  [<- / ->]   Page scroll\n"
             << L"  [Enter]     Confirm selection\n"
             << L"  [Esc]       Cancel / unpin process\n\n"
@@ -187,7 +183,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  Space or Enter in search/filter pins a\n"
             << L"  process. Cursor stays on it during list\n"
             << L"  refresh. Reset: Esc.\n\n"
-            << VT_FG_BRIGHT_CYAN << L" Kill (F9):" << VT_RESET << L"\n"
+            << VT_FG_BRIGHT_CYAN << L" Kill (F9/K):" << VT_RESET << L"\n"
             << L"  Terminates process under cursor. Menu:\n"
             << L"  TERMINATE — force kill (immediate)\n"
             << L"  WM_CLOSE  — graceful (close windows)\n\n"
