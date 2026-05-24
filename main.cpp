@@ -28,10 +28,17 @@ std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads; // PID -> th
 // ПОТiК 1: Input — обробка клавiатури (polling ~30ms)
 // ============================================================
 void InputThread(AppConfig& config) {
+    HWND consoleWindow = GetConsoleWindow();
+
     while (g_running) {
         // Пауза пiд час Kill-дiалогу
         if (g_inputPaused) {
             Sleep(50);
+            continue;
+        }
+        // Iгноруємо ввiд коли вiкно не активне
+        if (GetForegroundWindow() != consoleWindow) {
+            Sleep(100);
             continue;
         }
         // [F1 / H] - Довiдка
