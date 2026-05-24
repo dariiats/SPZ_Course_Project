@@ -22,28 +22,10 @@ std::vector<ProcessInfo> g_cachedProcesses;
 int g_cachedThreadCount = 0;
 std::vector<double> g_cachedCoreUsages;
 
-// === Debounce: запобігання повторним спрацюванням клавіш ===
-static inline bool Debounce(DWORD& lastTime, DWORD intervalMs = 180) {
-    DWORD now = GetTickCount();
-    if (now - lastTime < intervalMs) return false;
-    lastTime = now;
-    return true;
-}
-
 // ============================================================
-// ПОТІК 1: Input — обробка клавіатури (event-driven)
+// ПОТІК 1: Input — обробка клавіатури (polling ~30ms)
 // ============================================================
 void InputThread(AppConfig& config) {
-    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
-
-    // Debounce timestamps для кожної дії
-    DWORD dbHelp = 0, dbLang = 0, dbInterval = 0, dbTab = 0;
-    DWORD dbSearch = 0, dbFilter = 0, dbTree = 0, dbSort = 0;
-    DWORD dbSortDir = 0, dbPriUp = 0, dbPriDown = 0, dbQuit = 0;
-    DWORD dbSpace = 0, dbEsc = 0, dbKill = 0;
-    DWORD dbUp = 0, dbDown = 0, dbLeft = 0, dbRight = 0;
-    DWORD dbSortUp = 0, dbSortDown = 0, dbSortEnter = 0, dbSortEsc = 0;
-
     while (g_running) {
         // Пауза під час Kill-діалогу
         if (g_inputPaused) {
@@ -55,11 +37,84 @@ void InputThread(AppConfig& config) {
         HWND foreground = GetForegroundWindow();
         HWND console = GetConsoleWindow();
         if (foreground != console) {
-            Sleep(80);
+            Sleep(100);
+            continue;
+        }
+        // [F1 / H] - Довідка
+        if ((GetAsyncKeyState(VK_F1) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('H') & 0x8000))) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.showHelp = !config.showHelp;
+            g_needsCls = true;
+            Sleep(250);
+        }
+        // [L] - Мова (тільки коли не в режимі вводу)
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('L') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
+            Sleep(250);
+        }
+        // [I] - Інтервал (тільки коли не в режимі вводу)
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('I') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            if (config.refreshInterval == 1000) config.refreshInterval = 3000;
+            else if (config.refreshInterval == 3000) config.refreshInterval = 5000;
+            else config.refreshInterval = 1000;
+            Sleep(250);
+        }
+        // [Tab] - Перемикання вкладок
+        if (GetAsyncKeyState(VK_TAB) & 0x8000) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
+            config.pageOffset = 0;
+            config.selectedRow = 0;
+            config.selectedPid = 0;
+            config.pinnedPid = 0;
+            g_needsCls = true;
+            Sleep(250);
+        }
+
+        // [F3 / /] - Search (перехід до збігу без фільтрації)
+        if ((GetAsyncKeyState(VK_F3) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_2) & 0x8000))) {
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                if (!config.showSearch) {
+                    config.showSearch = true;
+                    config.showFilter = false;
+                    config.searchQuery.clear();
+                    config.searchMatchIndex = 0;
+                    config.savedPageOffset = config.pageOffset;
+                    config.savedSelectedRow = config.selectedRow;
+                } else {
+                    // Повторне F3 — наступний збіг
+                    config.searchMatchIndex++;
+                }
+            }
+            Sleep(250);
+            while (_kbhit()) _getch();
             continue;
         }
 
-        // Режим вводу тексту для Search або Filter — використовуємо _kbhit для символів
+        // [F4 / \] - Filter (фільтрація списку)
+        if ((GetAsyncKeyState(VK_F4) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_5) & 0x8000))) {
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                if (!config.showFilter) {
+                    config.showFilter = true;
+                    config.showSearch = false;
+                    config.searchQuery.clear();
+                    config.pageOffset = 0;
+                    config.selectedRow = 0;
+                }
+            }
+            Sleep(250);
+            while (_kbhit()) _getch();
+            continue;
+        }
+
+        // Режим вводу тексту для Search або Filter
         if (config.showSearch || config.showFilter) {
             if (_kbhit()) {
                 int ch = _getch();
@@ -115,22 +170,48 @@ void InputThread(AppConfig& config) {
                     if (config.showFilter) { config.pageOffset = 0; config.selectedRow = 0; }
                 }
             }
-            Sleep(15);
+            Sleep(30);
             continue;
+        }
+
+        // [F5 / T] - Tree view (дерево процесів)
+        if ((GetAsyncKeyState(VK_F5) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('T') & 0x8000))) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.treeView = !config.treeView;
+            config.pageOffset = 0;
+            config.selectedRow = 0;
+            config.selectedPid = 0;
+            Sleep(250);
+        }
+
+        // [F2 / S] - Меню сортування (Setup в htop)
+        if ((GetAsyncKeyState(VK_F2) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('S') & 0x8000))) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.showSortMenu = !config.showSortMenu;
+            if (config.showSortMenu) {
+                int maxIdx = (config.activeTab == TabView::IO) ? 5 : 10;
+                if (config.sortMenuIndex > maxIdx) config.sortMenuIndex = 0;
+                g_needsCls = true;
+            }
+            Sleep(250);
         }
 
         // Навігація в меню сортування
         if (config.showSortMenu) {
-            if ((GetAsyncKeyState(VK_UP) & 0x8000) && Debounce(dbSortUp, 120)) {
+            if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.sortMenuIndex > 0) config.sortMenuIndex--;
+                Sleep(150);
             }
-            if ((GetAsyncKeyState(VK_DOWN) & 0x8000) && Debounce(dbSortDown, 120)) {
+            if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 int maxIdx = (config.activeTab == TabView::IO) ? 5 : 10;
                 if (config.sortMenuIndex < maxIdx) config.sortMenuIndex++;
+                Sleep(150);
             }
-            if ((GetAsyncKeyState(VK_RETURN) & 0x8000) && Debounce(dbSortEnter, 200)) {
+            if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.activeTab == TabView::IO) {
                     config.ioSortColumn = static_cast<IoSortColumn>(config.sortMenuIndex);
@@ -143,122 +224,33 @@ void InputThread(AppConfig& config) {
                 config.selectedPid = 0;
                 config.pinnedPid = 0;
                 g_needsCls = true;
+                Sleep(250);
             }
-            if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) && Debounce(dbSortEsc, 200)) {
+            if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.showSortMenu = false;
                 g_needsCls = true;
+                Sleep(250);
             }
-            Sleep(15);
+            Sleep(30);
             continue;
         }
 
-        // === Основні клавіші (polling з debounce) ===
-
-        // [F1 / H] - Довідка
-        if (((GetAsyncKeyState(VK_F1) & 0x8000) ||
-            (GetAsyncKeyState('H') & 0x8000)) && Debounce(dbHelp, 200)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            config.showHelp = !config.showHelp;
-            g_needsCls = true;
-        }
-        // [L] - Мова
-        if ((GetAsyncKeyState('L') & 0x8000) && Debounce(dbLang, 200)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
-        }
-        // [I] - Інтервал
-        if ((GetAsyncKeyState('I') & 0x8000) && Debounce(dbInterval, 200)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            if (config.refreshInterval == 1000) config.refreshInterval = 3000;
-            else if (config.refreshInterval == 3000) config.refreshInterval = 5000;
-            else config.refreshInterval = 1000;
-        }
-        // [Tab] - Перемикання вкладок
-        if ((GetAsyncKeyState(VK_TAB) & 0x8000) && Debounce(dbTab, 200)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
-            config.pageOffset = 0;
-            config.selectedRow = 0;
-            config.selectedPid = 0;
-            config.pinnedPid = 0;
-            g_needsCls = true;
-        }
-
-        // [F3 / /] - Search
-        if (((GetAsyncKeyState(VK_F3) & 0x8000) ||
-            (GetAsyncKeyState(VK_OEM_2) & 0x8000)) && Debounce(dbSearch, 200)) {
-            {
-                std::lock_guard<std::mutex> lock(g_configMutex);
-                if (!config.showSearch) {
-                    config.showSearch = true;
-                    config.showFilter = false;
-                    config.searchQuery.clear();
-                    config.searchMatchIndex = 0;
-                    config.savedPageOffset = config.pageOffset;
-                    config.savedSelectedRow = config.selectedRow;
-                } else {
-                    config.searchMatchIndex++;
-                }
-            }
-            while (_kbhit()) _getch();
-            continue;
-        }
-
-        // [F4 / \] - Filter
-        if (((GetAsyncKeyState(VK_F4) & 0x8000) ||
-            (GetAsyncKeyState(VK_OEM_5) & 0x8000)) && Debounce(dbFilter, 200)) {
-            {
-                std::lock_guard<std::mutex> lock(g_configMutex);
-                if (!config.showFilter) {
-                    config.showFilter = true;
-                    config.showSearch = false;
-                    config.searchQuery.clear();
-                    config.pageOffset = 0;
-                    config.selectedRow = 0;
-                }
-            }
-            while (_kbhit()) _getch();
-            continue;
-        }
-
-        // [F5 / T] - Tree view
-        if (((GetAsyncKeyState(VK_F5) & 0x8000) ||
-            (GetAsyncKeyState('T') & 0x8000)) && Debounce(dbTree, 200)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            config.treeView = !config.treeView;
-            config.pageOffset = 0;
-            config.selectedRow = 0;
-            config.selectedPid = 0;
-        }
-
-        // [F2 / S] - Меню сортування
-        if (((GetAsyncKeyState(VK_F2) & 0x8000) ||
-            (GetAsyncKeyState('S') & 0x8000)) && Debounce(dbSort, 200)) {
-            std::lock_guard<std::mutex> lock(g_configMutex);
-            config.showSortMenu = !config.showSortMenu;
-            if (config.showSortMenu) {
-                int maxIdx = (config.activeTab == TabView::IO) ? 5 : 10;
-                if (config.sortMenuIndex > maxIdx) config.sortMenuIndex = 0;
-                g_needsCls = true;
-            }
-        }
-
-        // [F6 / >] - Інвертувати сортування
-        if (((GetAsyncKeyState(VK_F6) & 0x8000) ||
-            ((GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000)))
-            && Debounce(dbSortDir, 200)) {
+        // [F6 / >] - Інвертувати сортування (SortBy в htop)
+        if ((GetAsyncKeyState(VK_F6) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.sortAscending = !config.sortAscending;
             config.pageOffset = 0;
             config.selectedRow = 0;
             config.selectedPid = 0;
             config.pinnedPid = 0;
+            Sleep(250);
         }
 
-        // [F7 / ]] - Pri+
-        if (((GetAsyncKeyState(VK_F7) & 0x8000) ||
-            (GetAsyncKeyState(VK_OEM_6) & 0x8000)) && Debounce(dbPriUp, 200)) {
+        // [F7 / ]] - Pri+ (підвищити пріоритет виділеного процесу)
+        if ((GetAsyncKeyState(VK_F7) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_6) & 0x8000))) {
             DWORD targetPid = 0;
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -267,11 +259,12 @@ void InputThread(AppConfig& config) {
             if (targetPid != 0) {
                 SystemManager::ChangeProcessPriority(targetPid, true);
             }
+            Sleep(250);
         }
 
-        // [F8 / [] - Pri-
-        if (((GetAsyncKeyState(VK_F8) & 0x8000) ||
-            (GetAsyncKeyState(VK_OEM_4) & 0x8000)) && Debounce(dbPriDown, 200)) {
+        // [F8 / [] - Pri- (знизити пріоритет виділеного процесу)
+        if ((GetAsyncKeyState(VK_F8) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_4) & 0x8000))) {
             DWORD targetPid = 0;
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -280,28 +273,30 @@ void InputThread(AppConfig& config) {
             if (targetPid != 0) {
                 SystemManager::ChangeProcessPriority(targetPid, false);
             }
+            Sleep(250);
         }
 
-        // [F10 / Q] - Quit
-        if (((GetAsyncKeyState(VK_F10) & 0x8000) ||
-            (GetAsyncKeyState('Q') & 0x8000)) && Debounce(dbQuit, 200)) {
+        // [F10 / Q] - Quit (вихід)
+        if ((GetAsyncKeyState(VK_F10) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('Q') & 0x8000))) {
             g_running = false;
             break;
         }
 
-        // [Space] - Закріпити/відкріпити процес
-        if ((GetAsyncKeyState(VK_SPACE) & 0x8000) && Debounce(dbSpace, 200)) {
+        // [Space] - Закріпити/відкріпити процес під курсором
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_SPACE) & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             if (config.pinnedPid == config.selectedPid) {
-                config.pinnedPid = 0;
+                config.pinnedPid = 0; // відкріпити
             } else {
-                config.pinnedPid = config.selectedPid;
+                config.pinnedPid = config.selectedPid; // закріпити
             }
+            Sleep(250);
         }
 
-        // Стрілки — виділення та гортання (швидший repeat)
-        if (!config.showHelp) {
-            if ((GetAsyncKeyState(VK_UP) & 0x8000) && Debounce(dbUp, 80)) {
+        // Стрілки — виділення та гортання
+        if (!config.showHelp && !config.showSortMenu) {
+            if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.selectedPid = 0;
                 if (config.selectedRow > 0) {
@@ -309,45 +304,50 @@ void InputThread(AppConfig& config) {
                 } else if (config.pageOffset > 0) {
                     config.pageOffset--;
                 }
+                Sleep(120);
             }
-            if ((GetAsyncKeyState(VK_DOWN) & 0x8000) && Debounce(dbDown, 80)) {
+            if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.selectedPid = 0;
                 config.selectedRow++;
+                Sleep(120);
             }
-            if ((GetAsyncKeyState(VK_RIGHT) & 0x8000) && Debounce(dbRight, 120)) {
+            if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.selectedPid = 0;
                 config.pageOffset += config.visibleRows;
                 config.selectedRow = 0;
+                Sleep(150);
             }
-            if ((GetAsyncKeyState(VK_LEFT) & 0x8000) && Debounce(dbLeft, 120)) {
+            if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.selectedPid = 0;
                 if (config.pageOffset >= config.visibleRows) {
                     config.pageOffset -= config.visibleRows;
                     config.selectedRow = 0;
                 }
+                Sleep(150);
             }
         }
 
-        // [Esc] - Скинути пін
-        if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) && Debounce(dbEsc, 200)) {
+        // [Esc] - Скинути пін і повернутись на початок списку
+        if (!config.showSearch && !config.showFilter && !config.showSortMenu && (GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.pinnedPid = 0;
             config.selectedPid = 0;
             config.pageOffset = 0;
             config.selectedRow = 0;
+            Sleep(250);
         }
 
         // [F9 / K] - Kill
-        if (((GetAsyncKeyState(VK_F9) & 0x8000) ||
-            (GetAsyncKeyState('K') & 0x8000)) && Debounce(dbKill, 200)) {
+        if ((GetAsyncKeyState(VK_F9) & 0x8000) ||
+            (!config.showSearch && !config.showFilter && (GetAsyncKeyState('K') & 0x8000))) {
             g_killRequested = true;
+            Sleep(250);
         }
 
-        // Мінімальний sleep — достатньо для ~66 Hz polling без навантаження CPU
-        Sleep(15);
+        Sleep(30);
     }
 }
 
@@ -383,15 +383,13 @@ void DataThread(AppConfig& config) {
             g_cachedCoreUsages = coreMon.GetAllCoreUsages();
         }
 
-        // Спимо відповідно до інтервалу оновлення (дрібними шматками для швидкого виходу)
+        // Спимо відповідно до інтервалу оновлення
         int interval;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
             interval = config.refreshInterval;
         }
-        for (int elapsed = 0; elapsed < interval && g_running; elapsed += 100) {
-            Sleep(100);
-        }
+        Sleep(interval);
     }
 }
 
@@ -442,8 +440,8 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             }
             interval = config.refreshInterval;
         }
-        // Рендер з фіксованим інтервалом ~200мс для плавності
-        Sleep(200);
+        // Mutex звільнений — InputThread може працювати під час sleep
+        Sleep(interval / 4); // Рендер ~250мс — достатньо плавно
     }
 }
 
