@@ -59,31 +59,36 @@ int GetConsoleHeight() {
 }
 
 void ConsoleUI::InitConsole() {
-    // Встановлюємо UTF-8 тільки для ВИВОДУ (input codepage не чіпаємо —
-    // SetConsoleCP(65001) ламає _kbhit/_getch на деяких системах)
+    // Встановлюємо UTF-8 тільки для ВИВОДУ
     SetConsoleOutputCP(65001);
     _setmode(_fileno(stdout), _O_U16TEXT);
 
-    // Locale тільки для LC_CTYPE (вивід wchar), не LC_ALL
-    std::setlocale(LC_CTYPE, ".UTF-8");
+    // Locale тільки для LC_CTYPE (вивід wchar)
+    // Якщо ".UTF-8" недоступна — fallback на дефолтну
+    if (!std::setlocale(LC_CTYPE, ".UTF-8")) {
+        std::setlocale(LC_CTYPE, "");
+    }
 
-    // Увімкнення Virtual Terminal Processing
+    // Увімкнення Virtual Terminal Processing (з перевіркою підтримки)
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD dwMode = 0;
     GetConsoleMode(hOut, &dwMode);
     dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-    SetConsoleMode(hOut, dwMode);
-
-    // Альтернативний screen buffer (як htop)
-    std::wcout << L"\x1b[?1049h";
-    std::wcout << VT_CURSOR_HIDE;
-    std::wcout << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+    if (SetConsoleMode(hOut, dwMode)) {
+        // VT підтримується — використовуємо альтернативний screen buffer
+        std::wcout << L"\x1b[?1049h";
+        std::wcout << VT_CURSOR_HIDE;
+        std::wcout << VT_CLEAR_SCREEN << VT_CURSOR_HOME;
+    } else {
+        // Fallback для старих версій Windows — просто очищуємо екран
+        system("cls");
+    }
 
     // Вимикаємо обробку вводу консоллю щоб _kbhit/_getch працювали коректно
     HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
     DWORD inMode = 0;
     GetConsoleMode(hIn, &inMode);
-    inMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT);
+    inMode &= ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
     SetConsoleMode(hIn, inMode);
 }
 
