@@ -32,6 +32,14 @@ void InputThread(AppConfig& config) {
             Sleep(50);
             continue;
         }
+
+        // Обробляємо клавіші тільки коли консоль у фокусі
+        HWND foreground = GetForegroundWindow();
+        HWND console = GetConsoleWindow();
+        if (foreground != console) {
+            Sleep(100);
+            continue;
+        }
         // [F1 / H] - Довідка
         if ((GetAsyncKeyState(VK_F1) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState('H') & 0x8000))) {
