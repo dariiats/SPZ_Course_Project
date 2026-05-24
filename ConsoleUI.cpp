@@ -59,11 +59,13 @@ int GetConsoleHeight() {
 }
 
 void ConsoleUI::InitConsole() {
-    // Встановлюємо UTF-8/Unicode для коректного відображення символів
+    // Встановлюємо UTF-8 тільки для ВИВОДУ (input codepage не чіпаємо —
+    // SetConsoleCP(65001) ламає _kbhit/_getch на деяких системах)
     SetConsoleOutputCP(65001);
-    SetConsoleCP(65001);
     _setmode(_fileno(stdout), _O_U16TEXT);
-    std::setlocale(LC_ALL, ".UTF-8");
+
+    // Locale тільки для LC_CTYPE (вивід wchar), не LC_ALL
+    std::setlocale(LC_CTYPE, ".UTF-8");
 
     // Увімкнення Virtual Terminal Processing
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
