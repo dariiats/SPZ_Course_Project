@@ -521,21 +521,31 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         processes = std::move(treeProcesses);
     }
 
-    // Вставка потокiв пiд кожним процесом (режим showThreads)
+    // Вставка потокiв як окремих рядкiв (як htop — потоки нарiвнi з процесами)
     if (config.showThreads && config.activeTab == TabView::Main) {
+        extern std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads;
+        std::unordered_map<DWORD, std::vector<ThreadInfo>> threadsCopy;
+        {
+            extern std::mutex g_dataMutex;
+            std::lock_guard<std::mutex> lock(g_dataMutex);
+            threadsCopy = g_cachedThreads;
+        }
+
         std::vector<ProcessInfo> expanded;
-        expanded.reserve(processes.size() * 2);
+        expanded.reserve(processes.size() * 4);
         for (const auto& proc : processes) {
             expanded.push_back(proc);
             if (proc.isThread) continue;
 
-            std::vector<ThreadInfo> threads = SystemManager::GetThreadsForProcess(proc.pid);
-            for (const auto& t : threads) {
+            auto it = threadsCopy.find(proc.pid);
+            if (it == threadsCopy.end()) continue;
+
+            for (const auto& t : it->second) {
                 ProcessInfo tRow = {};
                 tRow.pid = proc.pid;
                 tRow.tid = t.tid;
                 tRow.parentPid = proc.pid;
-                tRow.name = L"  |- [" + std::to_wstring(t.tid) + L"]";
+                tRow.name = proc.name;
                 tRow.userName = proc.userName;
                 tRow.memoryUsage = 0;
                 tRow.virtualMemory = 0;
@@ -653,19 +663,15 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         } else if (isPinned) {
             std::wcout << VT_FG_YELLOW;
         } else if (proc.isThread) {
-            std::wcout << VT_FG_DARKGRAY;
+            std::wcout << VT_FG_GREEN;
         } else {
             std::wcout << VT_FG_BRIGHT_CYAN;
         }
 
-        // Для потокiв показуємо TID замiсть PID
-        if (proc.isThread) {
-            std::wcout << std::right << std::setw(6) << proc.tid << L" ";
-        } else {
-            std::wcout << std::right << std::setw(6) << proc.pid << L" ";
-        }
+        // PID (для потокiв — той самий PID що й у процесу, як в htop)
+        std::wcout << std::right << std::setw(6) << proc.pid << L" ";
         if (!isSelected && !isPinned) std::wcout << VT_RESET;
-        if (proc.isThread && !isSelected) std::wcout << VT_FG_DARKGRAY;
+        if (proc.isThread && !isSelected && !isPinned) std::wcout << VT_FG_GREEN;
         std::wcout << std::left << std::setw(9) << user;
 
         if (config.activeTab == TabView::Main) {

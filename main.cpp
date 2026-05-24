@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <conio.h>
 #include <tlhelp32.h>
+#include <unordered_map>
 
 // === Глобальний стан для синхронiзацiї мiж потоками ===
 std::mutex g_configMutex;       // Захист AppConfig
@@ -21,6 +22,7 @@ std::atomic<bool> g_inputPaused{ false };
 std::vector<ProcessInfo> g_cachedProcesses;
 int g_cachedThreadCount = 0;
 std::vector<double> g_cachedCoreUsages;
+std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads; // PID -> threads
 
 // ============================================================
 // ПОТiК 1: Input — обробка клавiатури (polling ~30ms)
@@ -374,12 +376,28 @@ void DataThread(AppConfig& config) {
         // Оновлення per-core CPU
         coreMon.Update();
 
+        // Збiр потокiв (тiльки якщо режим увiмкнено)
+        bool needThreads;
+        {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            needThreads = config.showThreads;
+        }
+        std::unordered_map<DWORD, std::vector<ThreadInfo>> freshThreads;
+        if (needThreads) {
+            for (const auto& proc : freshProcesses) {
+                if (proc.threadCount > 0) {
+                    freshThreads[proc.pid] = SystemManager::GetThreadsForProcess(proc.pid);
+                }
+            }
+        }
+
         // Оновлення кешу пiд mutex
         {
             std::lock_guard<std::mutex> lock(g_dataMutex);
             g_cachedProcesses = std::move(freshProcesses);
             g_cachedThreadCount = threadCount;
             g_cachedCoreUsages = coreMon.GetAllCoreUsages();
+            g_cachedThreads = std::move(freshThreads);
         }
 
         // Спимо вiдповiдно до iнтервалу оновлення
