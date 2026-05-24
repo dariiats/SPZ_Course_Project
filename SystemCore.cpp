@@ -7,7 +7,7 @@
 
 #pragma comment(lib, "advapi32.lib")
 
-// Статичні члени SystemManager
+// Статичнi члени SystemManager
 std::unordered_map<DWORD, SystemManager::PrevCpuData> SystemManager::prevCpuMap_;
 ULONGLONG SystemManager::prevSystemTime_ = 0;
 std::unordered_map<DWORD, SystemManager::PrevIoData> SystemManager::prevIoMap_;
@@ -108,7 +108,7 @@ PerCoreCpuMonitor::PerCoreCpuMonitor() {
     coreCount_ = si.dwNumberOfProcessors;
     prevTimes_.resize(coreCount_);
     coreUsages_.resize(coreCount_, 0.0);
-    Update(); // Перший знімок
+    Update(); // Перший знiмок
 }
 
 void PerCoreCpuMonitor::Update() {
@@ -198,7 +198,7 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
 
     ULONGLONG systemTimeDelta = curSystemTime - prevSystemTime_;
 
-    // Wall clock delta для IO rate (в мілісекундах)
+    // Wall clock delta для IO rate (в мiлiсекундах)
     static ULONGLONG prevWallClock = 0;
     ULONGLONG curWallClock = GetTickCount64();
     double wallDeltaSec = (prevWallClock > 0) ? (curWallClock - prevWallClock) / 1000.0 : 0.0;
@@ -267,14 +267,14 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                         auto it = prevCpuMap_.find(pe.th32ProcessID);
                         if (it != prevCpuMap_.end()) {
                             ULONGLONG procDelta = (kt + ut) - (it->second.kernelTime + it->second.userTime);
-                            // CPU% нормалізований до 0-100% (systemTimeDelta вже сумарний по всіх ядрах)
+                            // CPU% нормалiзований до 0-100% (systemTimeDelta вже сумарний по всiх ядрах)
                             info.cpuPercent = (static_cast<double>(procDelta) / static_cast<double>(systemTimeDelta)) * 100.0;
                             if (info.cpuPercent < 0.0) info.cpuPercent = 0.0;
                             if (info.cpuPercent > 100.0) info.cpuPercent = 100.0;
                         }
                     }
 
-                    // Зберігаємо поточні значення для наступного виклику
+                    // Зберiгаємо поточнi значення для наступного виклику
                     newCpuMap[pe.th32ProcessID] = { kt, ut, curSystemTime };
                 }
 
@@ -305,7 +305,7 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
                         info.ioDiskRead = 0;
                         info.ioDiskWrite = 0;
                     }
-                    // Зберігаємо поточні IO для наступного виклику
+                    // Зберiгаємо поточнi IO для наступного виклику
                     newIoMap[pe.th32ProcessID] = { ioCounters.ReadTransferCount, ioCounters.WriteTransferCount };
                 }
 
@@ -316,7 +316,7 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
     }
     CloseHandle(hSnapshot);
 
-    // Оновлюємо збережені дані для наступної ітерації
+    // Оновлюємо збереженi данi для наступної iтерацiї
     prevCpuMap_ = std::move(newCpuMap);
     prevIoMap_ = std::move(newIoMap);
     prevSystemTime_ = curSystemTime;
@@ -333,7 +333,7 @@ DWORD SystemManager::KillProcess(DWORD pid) {
     return result;
 }
 
-// М'яке завершення — надсилає WM_CLOSE всім вікнам процесу
+// М'яке завершення — надсилає WM_CLOSE всiм вiкнам процесу
 static BOOL CALLBACK EnumWindowsCloseProc(HWND hwnd, LPARAM lParam) {
     DWORD windowPid = 0;
     GetWindowThreadProcessId(hwnd, &windowPid);
@@ -352,7 +352,7 @@ DWORD SystemManager::ChangeProcessPriority(DWORD pid, bool increase) {
     HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION | PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == NULL) return GetLastError();
 
-    // Отримуємо поточний клас пріоритету
+    // Отримуємо поточний клас прiоритету
     DWORD currentClass = GetPriorityClass(hProcess);
     if (currentClass == 0) {
         DWORD err = GetLastError();
@@ -360,7 +360,7 @@ DWORD SystemManager::ChangeProcessPriority(DWORD pid, bool increase) {
         return err;
     }
 
-    // Порядок класів пріоритету (від низького до високого)
+    // Порядок класiв прiоритету (вiд низького до високого)
     static const DWORD priorityLevels[] = {
         IDLE_PRIORITY_CLASS,
         BELOW_NORMAL_PRIORITY_CLASS,

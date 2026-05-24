@@ -9,30 +9,30 @@
 #include <conio.h>
 #include <tlhelp32.h>
 
-// === Глобальний стан для синхронізації між потоками ===
+// === Глобальний стан для синхронiзацiї мiж потоками ===
 std::mutex g_configMutex;       // Захист AppConfig
-std::mutex g_dataMutex;         // Захист кешованих даних процесів
+std::mutex g_dataMutex;         // Захист кешованих даних процесiв
 std::atomic<bool> g_needsCls{ false };
 std::atomic<bool> g_killRequested{ false };
 std::atomic<bool> g_running{ true };
 std::atomic<bool> g_inputPaused{ false };
 
-// Кешовані дані процесів (заповнюються Data Thread, читаються Render Thread)
+// Кешованi данi процесiв (заповнюються Data Thread, читаються Render Thread)
 std::vector<ProcessInfo> g_cachedProcesses;
 int g_cachedThreadCount = 0;
 std::vector<double> g_cachedCoreUsages;
 
 // ============================================================
-// ПОТІК 1: Input — обробка клавіатури (polling ~30ms)
+// ПОТiК 1: Input — обробка клавiатури (polling ~30ms)
 // ============================================================
 void InputThread(AppConfig& config) {
     while (g_running) {
-        // Пауза під час Kill-діалогу
+        // Пауза пiд час Kill-дiалогу
         if (g_inputPaused) {
             Sleep(50);
             continue;
         }
-        // [F1 / H] - Довідка
+        // [F1 / H] - Довiдка
         if ((GetAsyncKeyState(VK_F1) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState('H') & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -40,13 +40,13 @@ void InputThread(AppConfig& config) {
             g_needsCls = true;
             Sleep(250);
         }
-        // [L] - Мова (тільки коли не в режимі вводу)
+        // [L] - Мова (тiльки коли не в режимi вводу)
         if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('L') & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.lang = (config.lang == Language::Ukrainian) ? Language::English : Language::Ukrainian;
             Sleep(250);
         }
-        // [I] - Інтервал (тільки коли не в режимі вводу)
+        // [I] - iнтервал (тiльки коли не в режимi вводу)
         if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('I') & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             if (config.refreshInterval == 1000) config.refreshInterval = 3000;
@@ -66,7 +66,7 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F3 / /] - Search (перехід до збігу без фільтрації)
+        // [F3 / /] - Search (перехiд до збiгу без фiльтрацiї)
         if ((GetAsyncKeyState(VK_F3) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_2) & 0x8000))) {
             {
@@ -79,7 +79,7 @@ void InputThread(AppConfig& config) {
                     config.savedPageOffset = config.pageOffset;
                     config.savedSelectedRow = config.selectedRow;
                 } else {
-                    // Повторне F3 — наступний збіг
+                    // Повторне F3 — наступний збiг
                     config.searchMatchIndex++;
                 }
             }
@@ -88,7 +88,7 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F4 / \] - Filter (фільтрація списку)
+        // [F4 / \] - Filter (фiльтрацiя списку)
         if ((GetAsyncKeyState(VK_F4) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_5) & 0x8000))) {
             {
@@ -112,7 +112,7 @@ void InputThread(AppConfig& config) {
                 int ch = _getch();
                 if (ch == 0 || ch == 0xE0) {
                     int ext = _getch();
-                    // F3 (0x3D) — наступний збіг (в search)
+                    // F3 (0x3D) — наступний збiг (в search)
                     if (ext == 0x3D && config.showSearch) {
                         std::lock_guard<std::mutex> lock(g_configMutex);
                         config.searchMatchIndex++;
@@ -137,7 +137,7 @@ void InputThread(AppConfig& config) {
                         config.pinnedPid = 0;
                     }
                 } else if (ch == '\r' || ch == '\n') {
-                    // Enter — підтвердити
+                    // Enter — пiдтвердити
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     if (config.showSearch) {
                         config.showSearch = false;
@@ -166,7 +166,7 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F5 / T] - Tree view (дерево процесів)
+        // [F5 / T] - Tree view (дерево процесiв)
         if ((GetAsyncKeyState(VK_F5) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState('T') & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -190,7 +190,7 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // Навігація в меню сортування
+        // Навiгацiя в меню сортування
         if (config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -228,7 +228,7 @@ void InputThread(AppConfig& config) {
             continue;
         }
 
-        // [F6 / >] - Інвертувати сортування (SortBy в htop)
+        // [F6 / >] - iнвертувати сортування (SortBy в htop)
         if ((GetAsyncKeyState(VK_F6) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_PERIOD) & 0x8000) && (GetAsyncKeyState(VK_SHIFT) & 0x8000))) {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -240,7 +240,7 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F7 / ]] - Pri+ (підвищити пріоритет виділеного процесу)
+        // [F7 / ]] - Pri+ (пiдвищити прiоритет видiленого процесу)
         if ((GetAsyncKeyState(VK_F7) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_6) & 0x8000))) {
             DWORD targetPid = 0;
@@ -254,7 +254,7 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F8 / [] - Pri- (знизити пріоритет виділеного процесу)
+        // [F8 / [] - Pri- (знизити прiоритет видiленого процесу)
         if ((GetAsyncKeyState(VK_F8) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_OEM_4) & 0x8000))) {
             DWORD targetPid = 0;
@@ -268,25 +268,25 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
-        // [F10 / Q] - Quit (вихід)
+        // [F10 / Q] - Quit (вихiд)
         if ((GetAsyncKeyState(VK_F10) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState('Q') & 0x8000))) {
             g_running = false;
             break;
         }
 
-        // [Space] - Закріпити/відкріпити процес під курсором
+        // [Space] - Закрiпити/вiдкрiпити процес пiд курсором
         if (!config.showSearch && !config.showFilter && (GetAsyncKeyState(VK_SPACE) & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             if (config.pinnedPid == config.selectedPid) {
-                config.pinnedPid = 0; // відкріпити
+                config.pinnedPid = 0; // вiдкрiпити
             } else {
-                config.pinnedPid = config.selectedPid; // закріпити
+                config.pinnedPid = config.selectedPid; // закрiпити
             }
             Sleep(250);
         }
 
-        // Стрілки — виділення та гортання
+        // Стрiлки — видiлення та гортання
         if (!config.showHelp && !config.showSortMenu) {
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -322,7 +322,7 @@ void InputThread(AppConfig& config) {
             }
         }
 
-        // [Esc] - Скинути пін і повернутись на початок списку
+        // [Esc] - Скинути пiн i повернутись на початок списку
         if (!config.showSearch && !config.showFilter && !config.showSortMenu && (GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.pinnedPid = 0;
@@ -344,16 +344,16 @@ void InputThread(AppConfig& config) {
 }
 
 // ============================================================
-// ПОТІК 2: Data Collector — збір даних процесів у фоні
+// ПОТiК 2: Data Collector — збiр даних процесiв у фонi
 // ============================================================
 void DataThread(AppConfig& config) {
     PerCoreCpuMonitor coreMon;
 
     while (g_running) {
-        // Збір даних (найважча операція)
+        // Збiр даних (найважча операцiя)
         std::vector<ProcessInfo> freshProcesses = SystemManager::GetProcesses();
 
-        // Підрахунок потоків
+        // Пiдрахунок потокiв
         int threadCount = 0;
         HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
         if (hThreadSnap != INVALID_HANDLE_VALUE) {
@@ -367,7 +367,7 @@ void DataThread(AppConfig& config) {
         // Оновлення per-core CPU
         coreMon.Update();
 
-        // Оновлення кешу під mutex
+        // Оновлення кешу пiд mutex
         {
             std::lock_guard<std::mutex> lock(g_dataMutex);
             g_cachedProcesses = std::move(freshProcesses);
@@ -375,7 +375,7 @@ void DataThread(AppConfig& config) {
             g_cachedCoreUsages = coreMon.GetAllCoreUsages();
         }
 
-        // Спимо відповідно до інтервалу оновлення
+        // Спимо вiдповiдно до iнтервалу оновлення
         int interval;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -386,13 +386,13 @@ void DataThread(AppConfig& config) {
 }
 
 // ============================================================
-// ПОТІК 3: Render — відображення UI
+// ПОТiК 3: Render — вiдображення UI
 // ============================================================
 void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
     int prevWidth = 0;
 
     while (g_running) {
-        // Детекція зміни розміру вікна
+        // Детекцiя змiни розмiру вiкна
         CONSOLE_SCREEN_BUFFER_INFO csbi;
         GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
         int curWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
@@ -401,15 +401,15 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
         }
         prevWidth = curWidth;
 
-        // Очищення екрану якщо потрібно
+        // Очищення екрану якщо потрiбно
         if (g_needsCls.exchange(false)) {
             std::wcout << L"\x1b[2J\x1b[H";
         }
 
-        // Kill-діалог (потребує stdin)
+        // Kill-дiалог (потребує stdin)
         if (g_killRequested.exchange(false)) {
             g_inputPaused = true;
-            // Очищуємо stdin від залишків
+            // Очищуємо stdin вiд залишкiв
             while (_kbhit()) _getch();
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -432,13 +432,13 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             }
             interval = config.refreshInterval;
         }
-        // Mutex звільнений — InputThread може працювати під час sleep
+        // Mutex звiльнений — InputThread може працювати пiд час sleep
         Sleep(interval / 4); // Рендер ~250мс — достатньо плавно
     }
 }
 
 // ============================================================
-// MAIN — запуск потоків
+// MAIN — запуск потокiв
 // ============================================================
 int main() {
     ConsoleUI::InitConsole();
@@ -450,7 +450,7 @@ int main() {
     cpuMon.GetCpuUsage();
     Sleep(100);
 
-    // Перший збір даних перед запуском потоків
+    // Перший збiр даних перед запуском потокiв
     {
         g_cachedProcesses = SystemManager::GetProcesses();
         HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
@@ -461,13 +461,13 @@ int main() {
             }
             CloseHandle(hThreadSnap);
         }
-        // Ініціалізація per-core (нулі на першому кадрі)
+        // iнiцiалiзацiя per-core (нулi на першому кадрi)
         SYSTEM_INFO si;
         GetSystemInfo(&si);
         g_cachedCoreUsages.resize(si.dwNumberOfProcessors, 0.0);
     }
 
-    // Запуск 3 потоків
+    // Запуск 3 потокiв
     std::thread input(InputThread, std::ref(config));
     std::thread data(DataThread, std::ref(config));
     std::thread render(RenderThread, std::ref(config), std::ref(cpuMon));
@@ -476,7 +476,7 @@ int main() {
     data.join();
     render.join();
 
-    // Відновлення консолі при виході
+    // Вiдновлення консолi при виходi
     std::wcout << L"\x1b[?1049l"; // Повернення з альтернативного буфера
     std::wcout << L"\x1b[?25h";   // Показати курсор
 

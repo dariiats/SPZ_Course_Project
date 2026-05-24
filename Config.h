@@ -41,20 +41,20 @@ struct AppConfig {
     int refreshInterval = 1000;
     bool showHelp = false;
     bool showSortMenu = false;
-    bool showSearch = false;       // F3 — Search (перехід до збігу)
-    bool showFilter = false;       // F4 — Filter (фільтрація списку)
-    bool searchNeedsJump = false;  // Прапорець: потрібно перемістити курсор до збігу
-    int searchMatchIndex = 0;      // Який збіг по порядку показувати (для F3 next)
-    std::wstring searchQuery;      // Спільний текст для Search і Filter
+    bool showSearch = false;       // F3 — Search (перехiд до збiгу)
+    bool showFilter = false;       // F4 — Filter (фiльтрацiя списку)
+    bool searchNeedsJump = false;  // Прапорець: потрiбно перемiстити курсор до збiгу
+    int searchMatchIndex = 0;      // Який збiг по порядку показувати (для F3 next)
+    std::wstring searchQuery;      // Спiльний текст для Search i Filter
     int sortMenuIndex = 0;
     int pageOffset = 0;
     int selectedRow = 0;
-    int savedPageOffset = 0;       // Збережена позиція перед Search
-    int savedSelectedRow = 0;      // Збережений виділений рядок перед Search
-    DWORD selectedPid = 0;         // PID виділеного процесу (оновлюється рендером)
-    DWORD pinnedPid = 0;           // PID закріпленого процесу (після пошуку/фільтру)
-    int visibleRows = 15;          // Кількість видимих рядків (оновлюється рендером)
-    bool treeView = false;         // F5 — Tree view (дерево процесів)
+    int savedPageOffset = 0;       // Збережена позицiя перед Search
+    int savedSelectedRow = 0;      // Збережений видiлений рядок перед Search
+    DWORD selectedPid = 0;         // PID видiленого процесу (оновлюється рендером)
+    DWORD pinnedPid = 0;           // PID закрiпленого процесу (пiсля пошуку/фiльтру)
+    int visibleRows = 15;          // Кiлькiсть видимих рядкiв (оновлюється рендером)
+    bool treeView = false;         // F5 — Tree view (дерево процесiв)
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Pid;
     IoSortColumn ioSortColumn = IoSortColumn::Pid;
@@ -65,14 +65,14 @@ class LocalizationManager {
 public:
     static std::wstring GetText(const std::string& key, Language lang) {
         if (lang == Language::Ukrainian) {
-            if (key == "title") return L"=== СИСТЕМНИЙ МОНІТОР ===";
+            if (key == "title") return L"=== СИСТЕМНИЙ МОНiТОР ===";
             if (key == "cpu") return L"Завантаження CPU: ";
             if (key == "ram") return L"Використання RAM: ";
             if (key == "headers") return L"PID     USER     PRI NI   VIRT    RES    SHR S CPU%  MEM%    TIME+ КОМАНДА";
-            if (key == "footer") return L"[H] Довідка | [L] Мова (UA/EN) | [I] Інтервал | [K] Завершити PID";
-            if (key == "access_denied") return L"Відмовлено в доступі!";
+            if (key == "footer") return L"[H] Довiдка | [L] Мова (UA/EN) | [I] iнтервал | [K] Завершити PID";
+            if (key == "access_denied") return L"Вiдмовлено в доступi!";
             if (key == "not_found") return L"Процес не знайдено!";
-            if (key == "success") return L"Успішно завершено!";
+            if (key == "success") return L"Успiшно завершено!";
         }
         else {
             if (key == "title") return L"=== SYSTEM MONITOR ===";
