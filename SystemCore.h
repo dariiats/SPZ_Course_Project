@@ -5,6 +5,15 @@
 #include <string>
 #include <unordered_map>
 
+struct ThreadInfo {
+    DWORD tid;
+    DWORD ownerPid;
+    int priority;            // Thread priority
+    double cpuPercent;       // CPU% потоку
+    ULONGLONG cpuTime;       // TIME+ (in milliseconds)
+    wchar_t state;           // S (R/S/W)
+};
+
 struct ProcessInfo {
     DWORD pid;
     DWORD parentPid;             // PPID для tree view
@@ -22,6 +31,9 @@ struct ProcessInfo {
     ULONGLONG ioWriteBytes;
     ULONGLONG ioDiskRead;    // Disk read rate (bytes)
     ULONGLONG ioDiskWrite;   // Disk write rate (bytes)
+    int threadCount;         // Кiлькiсть потокiв процесу
+    bool isThread;           // Чи це рядок потоку (для вiдображення)
+    DWORD tid;               // TID (якщо isThread)
 };
 
 class CpuMonitor {
@@ -58,19 +70,21 @@ private:
 
 class SystemManager {
 public:
-    static bool EnableDebugPrivilege();
-    static std::vector<ProcessInfo> GetProcesses();
-    static DWORD KillProcess(DWORD pid);
-    static DWORD CloseProcess(DWORD pid);
-    static DWORD ChangeProcessPriority(DWORD pid, bool increase);
-
-private:
     // Зберiгаємо попереднi CPU-часи для обчислення per-process CPU%
     struct PrevCpuData {
         ULONGLONG kernelTime = 0;
         ULONGLONG userTime = 0;
         ULONGLONG timestamp = 0; // system time snapshot
     };
+
+    static bool EnableDebugPrivilege();
+    static std::vector<ProcessInfo> GetProcesses();
+    static DWORD KillProcess(DWORD pid);
+    static DWORD CloseProcess(DWORD pid);
+    static DWORD ChangeProcessPriority(DWORD pid, bool increase);
+    static std::vector<ThreadInfo> GetThreadsForProcess(DWORD pid);
+
+private:
     static std::unordered_map<DWORD, PrevCpuData> prevCpuMap_;
     static ULONGLONG prevSystemTime_;
 
