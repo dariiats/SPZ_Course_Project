@@ -177,6 +177,13 @@ void InputThread(AppConfig& config) {
             Sleep(250);
         }
 
+        // [P] - Показати/сховати потоки процесiв (як htop H)
+        if (!config.showSearch && !config.showFilter && (GetAsyncKeyState('P') & 0x8000)) {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.showThreads = !config.showThreads;
+            Sleep(250);
+        }
+
         // [F2 / S] - Меню сортування (Setup в htop)
         if ((GetAsyncKeyState(VK_F2) & 0x8000) ||
             (!config.showSearch && !config.showFilter && (GetAsyncKeyState('S') & 0x8000))) {

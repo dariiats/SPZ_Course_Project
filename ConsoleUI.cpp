@@ -139,6 +139,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"              Повторне F3 — наступний збiг\n"
             << L"  [F4 / \\]    Фiльтр (залишає лише збiги)\n"
             << L"  [F5 / T]    Дерево процесiв (вкл/викл)\n"
+            << L"  [P]         Показати потоки (вкл/викл)\n"
             << L"  [F6 / >]    Змiнити напрямок сортування\n"
             << L"  [F7 / ]]    Pri+ (пiдвищити прiоритет)\n"
             << L"  [F8 / []    Pri- (знизити прiоритет)\n"
@@ -170,6 +171,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"              Press F3 again — next match\n"
             << L"  [F4 / \\]    Filter (show only matches)\n"
             << L"  [F5 / T]    Tree view (toggle)\n"
+            << L"  [P]         Show threads (toggle)\n"
             << L"  [F6 / >]    Toggle sort direction\n"
             << L"  [F7 / ]]    Pri+ (raise process priority)\n"
             << L"  [F8 / []    Pri- (lower process priority)\n"
@@ -519,6 +521,42 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         processes = std::move(treeProcesses);
     }
 
+    // Вставка потокiв пiд кожним процесом (режим showThreads)
+    if (config.showThreads && config.activeTab == TabView::Main) {
+        std::vector<ProcessInfo> expanded;
+        expanded.reserve(processes.size() * 2);
+        for (const auto& proc : processes) {
+            expanded.push_back(proc);
+            if (proc.isThread) continue;
+
+            std::vector<ThreadInfo> threads = SystemManager::GetThreadsForProcess(proc.pid);
+            for (const auto& t : threads) {
+                ProcessInfo tRow = {};
+                tRow.pid = proc.pid;
+                tRow.tid = t.tid;
+                tRow.parentPid = proc.pid;
+                tRow.name = L"  |- [" + std::to_wstring(t.tid) + L"]";
+                tRow.userName = proc.userName;
+                tRow.memoryUsage = 0;
+                tRow.virtualMemory = 0;
+                tRow.sharedMemory = 0;
+                tRow.priority = t.priority;
+                tRow.cpuPercent = t.cpuPercent;
+                tRow.memPercent = 0.0;
+                tRow.cpuTime = t.cpuTime;
+                tRow.state = t.state;
+                tRow.ioReadBytes = 0;
+                tRow.ioWriteBytes = 0;
+                tRow.ioDiskRead = 0;
+                tRow.ioDiskWrite = 0;
+                tRow.threadCount = 0;
+                tRow.isThread = true;
+                expanded.push_back(std::move(tRow));
+            }
+        }
+        processes = std::move(expanded);
+    }
+
     // Search (F3) — завжди тримаємо курсор на N-му збiгу (пiсля сортування)
     bool searchFound = true;
 
@@ -614,12 +652,20 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             }
         } else if (isPinned) {
             std::wcout << VT_FG_YELLOW;
+        } else if (proc.isThread) {
+            std::wcout << VT_FG_DARKGRAY;
         } else {
             std::wcout << VT_FG_BRIGHT_CYAN;
         }
 
-        std::wcout << std::right << std::setw(6) << proc.pid << L" ";
+        // Для потокiв показуємо TID замiсть PID
+        if (proc.isThread) {
+            std::wcout << std::right << std::setw(6) << proc.tid << L" ";
+        } else {
+            std::wcout << std::right << std::setw(6) << proc.pid << L" ";
+        }
         if (!isSelected && !isPinned) std::wcout << VT_RESET;
+        if (proc.isThread && !isSelected) std::wcout << VT_FG_DARKGRAY;
         std::wcout << std::left << std::setw(9) << user;
 
         if (config.activeTab == TabView::Main) {

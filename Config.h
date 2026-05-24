@@ -55,6 +55,7 @@ struct AppConfig {
     DWORD pinnedPid = 0;           // PID закрiпленого процесу (пiсля пошуку/фiльтру)
     int visibleRows = 15;          // Кiлькiсть видимих рядкiв (оновлюється рендером)
     bool treeView = false;         // F5 — Tree view (дерево процесiв)
+    bool showThreads = false;      // Показувати потоки процесiв (як htop H)
     TabView activeTab = TabView::Main;
     SortColumn sortColumn = SortColumn::Pid;
     IoSortColumn ioSortColumn = IoSortColumn::Pid;
