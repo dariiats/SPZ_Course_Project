@@ -384,11 +384,7 @@ void DataThread(AppConfig& config) {
         }
         std::unordered_map<DWORD, std::vector<ThreadInfo>> freshThreads;
         if (needThreads) {
-            for (const auto& proc : freshProcesses) {
-                if (proc.threadCount > 0) {
-                    freshThreads[proc.pid] = SystemManager::GetThreadsForProcess(proc.pid);
-                }
-            }
+            freshThreads = SystemManager::GetAllThreads();
         }
 
         // Оновлення кешу пiд mutex

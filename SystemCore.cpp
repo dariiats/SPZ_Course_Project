@@ -412,9 +412,13 @@ DWORD SystemManager::ChangeProcessPriority(DWORD pid, bool increase) {
 }
 
 std::vector<ThreadInfo> SystemManager::GetThreadsForProcess(DWORD pid) {
-    std::vector<ThreadInfo> threads;
+    // Не використовується напряму — див. GetAllThreads()
+    return {};
+}
 
-    // Отримуємо системний час для CPU%
+std::unordered_map<DWORD, std::vector<ThreadInfo>> SystemManager::GetAllThreads() {
+    std::unordered_map<DWORD, std::vector<ThreadInfo>> result;
+
     FILETIME sysIdleTime, sysKernelTime, sysUserTime;
     GetSystemTimes(&sysIdleTime, &sysKernelTime, &sysUserTime);
     ULONGLONG curSystemTime =
@@ -422,31 +426,27 @@ std::vector<ThreadInfo> SystemManager::GetThreadsForProcess(DWORD pid) {
         ((static_cast<ULONGLONG>(sysUserTime.dwHighDateTime) << 32) | sysUserTime.dwLowDateTime);
 
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if (hSnap == INVALID_HANDLE_VALUE) return threads;
+    if (hSnap == INVALID_HANDLE_VALUE) return result;
 
     THREADENTRY32 te = { sizeof(THREADENTRY32) };
     if (Thread32First(hSnap, &te)) {
         do {
-            if (te.th32OwnerProcessID != pid) continue;
-
             ThreadInfo ti = {};
             ti.tid = te.th32ThreadID;
-            ti.ownerPid = pid;
+            ti.ownerPid = te.th32OwnerProcessID;
             ti.priority = te.tpBasePri;
             ti.cpuPercent = 0.0;
             ti.cpuTime = 0;
             ti.state = L'S';
 
-            // Вiдкриваємо потiк для отримання часу CPU
-            HANDLE hThread = OpenThread(THREAD_QUERY_INFORMATION | THREAD_QUERY_LIMITED_INFORMATION, FALSE, te.th32ThreadID);
+            HANDLE hThread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, te.th32ThreadID);
             if (hThread != NULL) {
                 FILETIME createTime, exitTime, kernelTime, userTime;
                 if (GetThreadTimes(hThread, &createTime, &exitTime, &kernelTime, &userTime)) {
                     ULONGLONG kt = (static_cast<ULONGLONG>(kernelTime.dwHighDateTime) << 32) | kernelTime.dwLowDateTime;
                     ULONGLONG ut = (static_cast<ULONGLONG>(userTime.dwHighDateTime) << 32) | userTime.dwLowDateTime;
-                    ti.cpuTime = (kt + ut) / 10000; // 100ns -> ms
+                    ti.cpuTime = (kt + ut) / 10000;
 
-                    // CPU% через дельту
                     if (prevSystemTime_ > 0) {
                         ULONGLONG sysDelta = curSystemTime - prevSystemTime_;
                         auto it = g_prevThreadCpuMap.find(te.th32ThreadID);
@@ -459,16 +459,14 @@ std::vector<ThreadInfo> SystemManager::GetThreadsForProcess(DWORD pid) {
                     }
                     g_prevThreadCpuMap[te.th32ThreadID] = { kt, ut, curSystemTime };
 
-                    // Стан: якщо потiк використовує CPU — Running
                     if (ti.cpuPercent > 0.0) ti.state = L'R';
                 }
-
                 CloseHandle(hThread);
             }
 
-            threads.push_back(ti);
+            result[te.th32OwnerProcessID].push_back(ti);
         } while (Thread32Next(hSnap, &te));
     }
     CloseHandle(hSnap);
-    return threads;
+    return result;
 }
