@@ -9,6 +9,8 @@
 #include <mutex>
 #include <functional>
 #include <unordered_map>
+#include <io.h>
+#include <fcntl.h>
 #include <conio.h>
 
 // === Virtual Terminal Sequences ===
@@ -57,7 +59,11 @@ int GetConsoleHeight() {
 }
 
 void ConsoleUI::InitConsole() {
-    std::setlocale(LC_ALL, "");
+    // Встановлюємо UTF-8/Unicode для коректного відображення символів
+    SetConsoleOutputCP(65001);
+    SetConsoleCP(65001);
+    _setmode(_fileno(stdout), _O_U16TEXT);
+    std::setlocale(LC_ALL, ".UTF-8");
 
     // Увімкнення Virtual Terminal Processing
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
