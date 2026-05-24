@@ -83,6 +83,7 @@ public:
     static DWORD CloseProcess(DWORD pid);
     static DWORD ChangeProcessPriority(DWORD pid, bool increase);
     static std::vector<ThreadInfo> GetThreadsForProcess(DWORD pid);
+    static std::unordered_map<DWORD, std::vector<ThreadInfo>> GetAllThreads();
 
 private:
     static std::unordered_map<DWORD, PrevCpuData> prevCpuMap_;
