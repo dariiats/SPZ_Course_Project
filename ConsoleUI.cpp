@@ -415,6 +415,55 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     }
     std::wcout << VT_RESET;
 
+    // Додавання потокiв до загального списку (як htop — нарiвнi з процесами)
+    // Тiльки без tree view. В tree view потоки вставляються пiд процесом окремо.
+    if (config.showThreads && config.activeTab == TabView::Main && !config.treeView) {
+        extern std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads;
+        std::unordered_map<DWORD, std::vector<ThreadInfo>> threadsCopy;
+        {
+            extern std::mutex g_dataMutex;
+            std::lock_guard<std::mutex> lock(g_dataMutex);
+            threadsCopy = g_cachedThreads;
+        }
+
+        for (const auto& pair : threadsCopy) {
+            // Знаходимо iм'я та user батькiвського процесу
+            std::wstring procName = L"";
+            std::wstring procUser = L"-";
+            for (const auto& p : processes) {
+                if (p.pid == pair.first && !p.isThread) {
+                    procName = p.name;
+                    procUser = p.userName;
+                    break;
+                }
+            }
+
+            for (const auto& t : pair.second) {
+                ProcessInfo tRow = {};
+                tRow.pid = pair.first;
+                tRow.tid = t.tid;
+                tRow.parentPid = pair.first;
+                tRow.name = procName;
+                tRow.userName = procUser;
+                tRow.memoryUsage = 0;
+                tRow.virtualMemory = 0;
+                tRow.sharedMemory = 0;
+                tRow.priority = t.priority;
+                tRow.cpuPercent = t.cpuPercent;
+                tRow.memPercent = 0.0;
+                tRow.cpuTime = t.cpuTime;
+                tRow.state = t.state;
+                tRow.ioReadBytes = 0;
+                tRow.ioWriteBytes = 0;
+                tRow.ioDiskRead = 0;
+                tRow.ioDiskWrite = 0;
+                tRow.threadCount = 0;
+                tRow.isThread = true;
+                processes.push_back(std::move(tRow));
+            }
+        }
+    }
+
     // === СОРТУВАННЯ ===
     std::sort(processes.begin(), processes.end(), [&config](const ProcessInfo& a, const ProcessInfo& b) {
         int cmp = 0; // -1: a<b, 0: equal, 1: a>b
@@ -474,6 +523,21 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
 
     // Tree view — перебудова списку в деревоподiбному порядку
     if (config.treeView) {
+        // В tree view + threads: потоки вставляються пiд процесом як дiти
+        std::unordered_map<DWORD, std::vector<ThreadInfo>> threadsCopyTree;
+        if (config.showThreads && config.activeTab == TabView::Main) {
+            extern std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads;
+            extern std::mutex g_dataMutex;
+            std::lock_guard<std::mutex> lock(g_dataMutex);
+            threadsCopyTree = g_cachedThreads;
+        }
+
+        // Видаляємо потоки зi списку (вони будуть вставленi вручну пiд процесом)
+        processes.erase(
+            std::remove_if(processes.begin(), processes.end(),
+                [](const ProcessInfo& p) { return p.isThread; }),
+            processes.end());
+
         std::unordered_map<DWORD, std::vector<int>> childrenMap;
         std::unordered_map<DWORD, int> pidIndex;
         for (int i = 0; i < (int)processes.size(); ++i) {
@@ -505,7 +569,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             buildTree(root, 0);
         }
 
-        // Перебудовуємо список з вiдступами в iменi
+        // Перебудовуємо список з вiдступами в iменi + вставляємо потоки
         std::vector<ProcessInfo> treeProcesses;
         treeProcesses.reserve(treeOrder.size());
         for (const auto& entry : treeOrder) {
@@ -516,55 +580,42 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                 prefix += L"|-";
                 p.name = prefix + p.name;
             }
-            treeProcesses.push_back(std::move(p));
-        }
-        processes = std::move(treeProcesses);
-    }
+            treeProcesses.push_back(p);
 
-    // Вставка потокiв як окремих рядкiв (як htop — потоки нарiвнi з процесами)
-    if (config.showThreads && config.activeTab == TabView::Main) {
-        extern std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads;
-        std::unordered_map<DWORD, std::vector<ThreadInfo>> threadsCopy;
-        {
-            extern std::mutex g_dataMutex;
-            std::lock_guard<std::mutex> lock(g_dataMutex);
-            threadsCopy = g_cachedThreads;
-        }
-
-        std::vector<ProcessInfo> expanded;
-        expanded.reserve(processes.size() * 4);
-        for (const auto& proc : processes) {
-            expanded.push_back(proc);
-            if (proc.isThread) continue;
-
-            auto it = threadsCopy.find(proc.pid);
-            if (it == threadsCopy.end()) continue;
-
-            for (const auto& t : it->second) {
-                ProcessInfo tRow = {};
-                tRow.pid = proc.pid;
-                tRow.tid = t.tid;
-                tRow.parentPid = proc.pid;
-                tRow.name = proc.name;
-                tRow.userName = proc.userName;
-                tRow.memoryUsage = 0;
-                tRow.virtualMemory = 0;
-                tRow.sharedMemory = 0;
-                tRow.priority = t.priority;
-                tRow.cpuPercent = t.cpuPercent;
-                tRow.memPercent = 0.0;
-                tRow.cpuTime = t.cpuTime;
-                tRow.state = t.state;
-                tRow.ioReadBytes = 0;
-                tRow.ioWriteBytes = 0;
-                tRow.ioDiskRead = 0;
-                tRow.ioDiskWrite = 0;
-                tRow.threadCount = 0;
-                tRow.isThread = true;
-                expanded.push_back(std::move(tRow));
+            // Вставляємо потоки пiд процесом в деревi
+            if (config.showThreads && config.activeTab == TabView::Main) {
+                auto tIt = threadsCopyTree.find(p.pid);
+                if (tIt != threadsCopyTree.end()) {
+                    for (const auto& t : tIt->second) {
+                        ProcessInfo tRow = {};
+                        tRow.pid = p.pid;
+                        tRow.tid = t.tid;
+                        tRow.parentPid = p.pid;
+                        std::wstring tPrefix;
+                        for (int d = 0; d < entry.depth; ++d) tPrefix += L"  ";
+                        tPrefix += L"  |-";
+                        tRow.name = tPrefix + p.name;
+                        tRow.userName = p.userName;
+                        tRow.memoryUsage = 0;
+                        tRow.virtualMemory = 0;
+                        tRow.sharedMemory = 0;
+                        tRow.priority = t.priority;
+                        tRow.cpuPercent = t.cpuPercent;
+                        tRow.memPercent = 0.0;
+                        tRow.cpuTime = t.cpuTime;
+                        tRow.state = t.state;
+                        tRow.ioReadBytes = 0;
+                        tRow.ioWriteBytes = 0;
+                        tRow.ioDiskRead = 0;
+                        tRow.ioDiskWrite = 0;
+                        tRow.threadCount = 0;
+                        tRow.isThread = true;
+                        treeProcesses.push_back(std::move(tRow));
+                    }
+                }
             }
         }
-        processes = std::move(expanded);
+        processes = std::move(treeProcesses);
     }
 
     // Search (F3) — завжди тримаємо курсор на N-му збiгу (пiсля сортування)
@@ -668,8 +719,12 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             std::wcout << VT_FG_BRIGHT_CYAN;
         }
 
-        // PID (для потокiв — той самий PID що й у процесу, як в htop)
-        std::wcout << std::right << std::setw(6) << proc.pid << L" ";
+        // PID (для потокiв показуємо TID — як htop показує TID в колонцi PID)
+        if (proc.isThread) {
+            std::wcout << std::right << std::setw(6) << proc.tid << L" ";
+        } else {
+            std::wcout << std::right << std::setw(6) << proc.pid << L" ";
+        }
         if (!isSelected && !isPinned) std::wcout << VT_RESET;
         if (proc.isThread && !isSelected && !isPinned) std::wcout << VT_FG_GREEN;
         std::wcout << std::left << std::setw(9) << user;
