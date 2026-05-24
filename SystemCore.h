@@ -36,11 +36,11 @@ public:
     double GetCpuUsage();
 };
 
-// Per-core CPU моніторинг через NtQuerySystemInformation
+// Per-core CPU монiторинг через NtQuerySystemInformation
 class PerCoreCpuMonitor {
 public:
     PerCoreCpuMonitor();
-    void Update();                          // Оновити дані (викликати з інтервалом)
+    void Update();                          // Оновити данi (викликати з iнтервалом)
     int GetCoreCount() const;
     double GetCoreUsage(int coreIdx) const; // Повертає % для конкретного ядра
     const std::vector<double>& GetAllCoreUsages() const;
@@ -65,7 +65,7 @@ public:
     static DWORD ChangeProcessPriority(DWORD pid, bool increase);
 
 private:
-    // Зберігаємо попередні CPU-часи для обчислення per-process CPU%
+    // Зберiгаємо попереднi CPU-часи для обчислення per-process CPU%
     struct PrevCpuData {
         ULONGLONG kernelTime = 0;
         ULONGLONG userTime = 0;
@@ -74,7 +74,7 @@ private:
     static std::unordered_map<DWORD, PrevCpuData> prevCpuMap_;
     static ULONGLONG prevSystemTime_;
 
-    // Зберігаємо попередні IO-лічильники для обчислення rate
+    // Зберiгаємо попереднi IO-лiчильники для обчислення rate
     struct PrevIoData {
         ULONGLONG readBytes = 0;
         ULONGLONG writeBytes = 0;
