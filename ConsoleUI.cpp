@@ -57,6 +57,8 @@ int GetConsoleHeight() {
 }
 
 void ConsoleUI::InitConsole() {
+    // UTF-8 тільки для ВИВОДУ (SetConsoleCP не чіпаємо — ламає _kbhit/_getch)
+    SetConsoleOutputCP(65001);
     std::setlocale(LC_ALL, "");
 
     // Увімкнення Virtual Terminal Processing
@@ -136,7 +138,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [F1 / H]    Відкрити/закрити довідку\n"
             << L"  [F2 / S]    Меню сортування (вибір колонки)\n"
             << L"  [F3 / /]    Пошук (перехід до збігу по імені)\n"
-            << L"              Повторне F3 — наступний збіг\n"
+            << L"              Повторне F3 - наступний збiг\n"
             << L"  [F4 / \\]    Фільтр (залишає лише збіги)\n"
             << L"  [F5 / T]    Дерево процесів (вкл/викл)\n"
             << L"  [F6 / >]    Змінити напрямок сортування\n"
@@ -158,8 +160,8 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  оновленні списку. Скинути: Esc.\n\n"
             << VT_FG_BRIGHT_CYAN << L" Kill (F9/K):" << VT_RESET << L"\n"
             << L"  Завершує процес під курсором. Меню:\n"
-            << L"  TERMINATE — жорстке завершення\n"
-            << L"  WM_CLOSE  — м'яке (закриття вікон)\n\n"
+            << L"  TERMINATE - жорстке завершення\n"
+            << L"  WM_CLOSE  - м'яке (закриття вiкон)\n\n"
             << VT_FG_DARKGRAY << L" Натисніть [F1] щоб повернутись..." << VT_RESET;
     } else {
         std::wcout << VT_RESET
@@ -167,7 +169,7 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  [F1 / H]    Open/close this help\n"
             << L"  [F2 / S]    Sort menu (choose column)\n"
             << L"  [F3 / /]    Search (jump to match by name)\n"
-            << L"              Press F3 again — next match\n"
+            << L"              Press F3 again - next match\n"
             << L"  [F4 / \\]    Filter (show only matches)\n"
             << L"  [F5 / T]    Tree view (toggle)\n"
             << L"  [F6 / >]    Toggle sort direction\n"
@@ -189,8 +191,8 @@ void ConsoleUI::RenderHelp(Language lang) {
             << L"  refresh. Reset: Esc.\n\n"
             << VT_FG_BRIGHT_CYAN << L" Kill (F9/K):" << VT_RESET << L"\n"
             << L"  Terminates process under cursor. Menu:\n"
-            << L"  TERMINATE — force kill (immediate)\n"
-            << L"  WM_CLOSE  — graceful (close windows)\n\n"
+            << L"  TERMINATE - force kill (immediate)\n"
+            << L"  WM_CLOSE  - graceful (close windows)\n\n"
             << VT_FG_DARKGRAY << L" Press [F1] to return..." << VT_RESET;
     }
     for (int i = 0; i < 5; i++) std::wcout << VT_CLEAR_LINE << L"\n";
@@ -353,7 +355,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
                      mVirt = L"VIRT", mRes = L"RES", mShr = L"SHR", mState = L"S",
                      mCpu = L"CPU%", mMem = L"MEM%", mTime = L"TIME+",
                      mCmd = (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"COMMAND");
-        const wchar_t arrow = config.sortAscending ? L'\x25B2' : L'\x25BC';
+        const wchar_t arrow = config.sortAscending ? L'^' : L'v';
         switch (config.sortColumn) {
             case SortColumn::Pid:        mPid = std::wstring(L" PID") + arrow; break;
             case SortColumn::User:       mUser = std::wstring(L"USER") + arrow; break;
@@ -391,7 +393,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wstring ioPid = L"  PID", ioUser = L"USER", ioRW = L"DISK R/W",
                      ioRead = L"DISK READ", ioWrite = L"DISK WRITE",
                      ioCmd = (config.lang == Language::Ukrainian ? L"КОМАНДА" : L"Command");
-        const wchar_t ioArrow = config.sortAscending ? L'\x25B2' : L'\x25BC';
+        const wchar_t ioArrow = config.sortAscending ? L'^' : L'v';
         switch (config.ioSortColumn) {
             case IoSortColumn::Pid:       ioPid = std::wstring(L" PID") + ioArrow; break;
             case IoSortColumn::User:      ioUser = std::wstring(L"USER") + ioArrow; break;
@@ -511,7 +513,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
             if (entry.depth > 0) {
                 std::wstring prefix;
                 for (int d = 0; d < entry.depth - 1; ++d) prefix += L"  ";
-                prefix += L"├─";
+                prefix += L"|-";
                 p.name = prefix + p.name;
             }
             treeProcesses.push_back(std::move(p));
@@ -694,7 +696,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F3 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пошук " : L"Search");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F4 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Фільтр" : L"Filter");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F5 " << VT_BG_CYAN << VT_FG_BLACK << (config.treeView ? (config.lang == Language::Ukrainian ? L"Список" : L"List  ") : (config.lang == Language::Ukrainian ? L"Дерево" : L"Tree  "));
-        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"\x25B2" : L"\x25BC");
+        std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F6 " << VT_BG_CYAN << VT_FG_BLACK << (config.sortAscending ? L"^" : L"v");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F7 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пріор+" : L"Pri+  ");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F8 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Пріор-" : L"Pri-  ");
         std::wcout << VT_BG_DARKGRAY << VT_FG_BRIGHT_WHITE << L" F9 " << VT_BG_CYAN << VT_FG_BLACK << (config.lang == Language::Ukrainian ? L"Заверш" : L"Kill  ");
