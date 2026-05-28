@@ -508,16 +508,28 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             continue;
         }
 
-        // Рендер
+        // Копiюємо config пiд mutex — малюємо вже без нього
+        // Це дозволяє Input потоку не блокуватись поки йде рендер
+        AppConfig configSnapshot;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
-            if (config.showSortMenu) {
-                ConsoleUI::RenderSortMenu(config);
-            } else if (config.showHelp) {
-                ConsoleUI::RenderHelp(config.lang);
-            } else {
-                ConsoleUI::RenderMonitor(config, cpuMon);
-            }
+            configSnapshot = config;
+        }
+
+        // Рендер без утримання mutex — Input вiльний працювати
+        if (configSnapshot.showSortMenu) {
+            ConsoleUI::RenderSortMenu(configSnapshot);
+        } else if (configSnapshot.showHelp) {
+            ConsoleUI::RenderHelp(configSnapshot.lang);
+        } else {
+            ConsoleUI::RenderMonitor(configSnapshot, cpuMon);
+        }
+
+        // Повертаємо змiни якi рендер мiг внести (visibleRows, selectedPid)
+        {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            config.visibleRows = configSnapshot.visibleRows;
+            config.selectedPid = configSnapshot.selectedPid;
         }
     }
 }
