@@ -860,6 +860,10 @@ void ConsoleUI::HandleKillDialog(AppConfig& config, CpuMonitor& cpuMon) {
         std::wcout << VT_FG_BRIGHT_RED
             << (ua ? L"\n  Вiдмовлено в доступi! PID: " : L"\n  Access denied! PID: ")
             << pidToKill << VT_RESET;
+    } else if (result == ERROR_INVALID_PARAMETER || result == ERROR_PROCESS_ABORTED) {
+        std::wcout << VT_FG_BRIGHT_RED
+            << (ua ? L"\n  Процес не знайдено або вже завершено! PID: " : L"\n  Process not found or already terminated! PID: ")
+            << pidToKill << VT_RESET;
     } else {
         std::wcout << VT_FG_BRIGHT_RED
             << (ua ? L"\n  Помилка завершення! PID: " : L"\n  Failed to kill! PID: ")
