@@ -18,11 +18,19 @@ std::atomic<bool> g_killRequested{ false };
 std::atomic<bool> g_running{ true };
 std::atomic<bool> g_inputPaused{ false };
 
+// Семафор для трiгеру рендеру — Input та Data сигналять, Render чекає
+HANDLE g_renderSemaphore = NULL;
+
 // Кешованi данi процесiв (заповнюються Data Thread, читаються Render Thread)
 std::vector<ProcessInfo> g_cachedProcesses;
 int g_cachedThreadCount = 0;
 std::vector<double> g_cachedCoreUsages;
 std::unordered_map<DWORD, std::vector<ThreadInfo>> g_cachedThreads; // PID -> threads
+
+// Сигнал рендеру: "є що малювати"
+inline void SignalRender() {
+    ReleaseSemaphore(g_renderSemaphore, 1, NULL);
+}
 
 // === Коди extended-клавiш (_getch повертає 0 або 0xE0, потiм другий байт) ===
 enum ExtKey : int {
@@ -81,7 +89,6 @@ void InputThread(AppConfig& config) {
 
             switch (state) {
             case InputState::TextInput:
-                // В режимi вводу тексту — тiльки F3 для наступного збiгу
                 if (ext == EXT_F3) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     if (config.showSearch) config.searchMatchIndex++;
@@ -100,7 +107,6 @@ void InputThread(AppConfig& config) {
                     if (config.sortMenuIndex < maxIdx) config.sortMenuIndex++;
                 } break;
                 case EXT_F2: {
-                    // F2 закриває меню сортування
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     config.showSortMenu = false;
                     g_needsCls = true;
@@ -217,6 +223,8 @@ void InputThread(AppConfig& config) {
                 }
                 break;
             }
+
+            SignalRender();
             continue;
         }
 
@@ -224,7 +232,6 @@ void InputThread(AppConfig& config) {
         switch (state) {
         case InputState::TextInput:
             if (ch == 27) {
-                // Esc — скасувати
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.showSearch) {
                     config.showSearch = false;
@@ -243,7 +250,6 @@ void InputThread(AppConfig& config) {
                     config.pinnedPid = 0;
                 }
             } else if (ch == '\r' || ch == '\n') {
-                // Enter — пiдтвердити
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.showSearch) {
                     config.showSearch = false;
@@ -284,7 +290,6 @@ void InputThread(AppConfig& config) {
                 config.pinnedPid = 0;
                 g_needsCls = true;
             } else if (ch == 27) {
-                // Esc
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.showSortMenu = false;
                 g_needsCls = true;
@@ -296,7 +301,6 @@ void InputThread(AppConfig& config) {
         case InputState::Normal:
             switch (ch) {
             case 27: {
-                // Esc — скинути пiн
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.pinnedPid = 0;
                 config.selectedPid = 0;
@@ -304,7 +308,6 @@ void InputThread(AppConfig& config) {
                 config.selectedRow = 0;
             } break;
             case '\t': {
-                // Tab — перемикання вкладок
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.activeTab = (config.activeTab == TabView::Main) ? TabView::IO : TabView::Main;
                 config.pageOffset = 0;
@@ -314,15 +317,11 @@ void InputThread(AppConfig& config) {
                 g_needsCls = true;
             } break;
             case ' ': {
-                // Space — закрiпити/вiдкрiпити
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 if (config.pinnedPid == config.selectedPid)
                     config.pinnedPid = 0;
                 else
                     config.pinnedPid = config.selectedPid;
-            } break;
-            case '\r': case '\n': {
-                // Enter — нiчого в нормальному режимi (зарезервовано)
             } break;
             case 'h': case 'H': {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -347,7 +346,6 @@ void InputThread(AppConfig& config) {
                 g_needsCls = true;
             } break;
             case '/': {
-                // Search
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.showSearch = true;
                 config.showFilter = false;
@@ -357,7 +355,6 @@ void InputThread(AppConfig& config) {
                 config.savedSelectedRow = config.selectedRow;
             } break;
             case '\\': {
-                // Filter
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.showFilter = true;
                 config.showSearch = false;
@@ -377,7 +374,6 @@ void InputThread(AppConfig& config) {
                 config.showThreads = !config.showThreads;
             } break;
             case '>': {
-                // Iнвертувати сортування
                 std::lock_guard<std::mutex> lock(g_configMutex);
                 config.sortAscending = !config.sortAscending;
                 config.pageOffset = 0;
@@ -386,13 +382,11 @@ void InputThread(AppConfig& config) {
                 config.pinnedPid = 0;
             } break;
             case ']': {
-                // Pri+
                 DWORD targetPid = 0;
                 { std::lock_guard<std::mutex> lock(g_configMutex); targetPid = config.selectedPid; }
                 if (targetPid != 0) SystemManager::ChangeProcessPriority(targetPid, true);
             } break;
             case '[': {
-                // Pri-
                 DWORD targetPid = 0;
                 { std::lock_guard<std::mutex> lock(g_configMutex); targetPid = config.selectedPid; }
                 if (targetPid != 0) SystemManager::ChangeProcessPriority(targetPid, false);
@@ -408,12 +402,16 @@ void InputThread(AppConfig& config) {
             break;
         }
 
+        SignalRender();
         if (!g_running) break;
     }
+
+    // При виходi — розблокувати Render щоб вiн теж завершився
+    SignalRender();
 }
 
 // ============================================================
-// ПОТiК 2: Data Collector — збiр даних процесiв у фонi
+// ПОТiК 2: Data Collector — збiр даних з перiодичнiстю, трiгерить рендер
 // ============================================================
 void DataThread(AppConfig& config) {
     PerCoreCpuMonitor coreMon;
@@ -456,6 +454,9 @@ void DataThread(AppConfig& config) {
             g_cachedThreads = std::move(freshThreads);
         }
 
+        // Данi оновленi — трiгеримо рендер
+        SignalRender();
+
         // Спимо вiдповiдно до iнтервалу оновлення
         int interval;
         {
@@ -467,18 +468,26 @@ void DataThread(AppConfig& config) {
 }
 
 // ============================================================
-// ПОТiК 3: Render — вiдображення UI
+// ПОТiК 3: Render — чекає на семафорi, малює коли є сигнал
 // ============================================================
 void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
     int prevWidth = 0;
 
     while (g_running) {
+        // Блокуємось на семафорi — чекаємо сигнал вiд Input або Data
+        WaitForSingleObject(g_renderSemaphore, INFINITE);
+
+        if (!g_running) break;
+
+        // Зливаємо зайвi сигнали (якщо накопичились) — рендеримо один раз
+        while (WaitForSingleObject(g_renderSemaphore, 0) == WAIT_OBJECT_0) {}
+
         // Детекцiя змiни розмiру вiкна
         CONSOLE_SCREEN_BUFFER_INFO csbi;
         GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
         int curWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
         if (prevWidth != 0 && curWidth != prevWidth) {
-            std::wcout << L"\x1b[2J\x1b[H"; // Повне очищення при resize
+            std::wcout << L"\x1b[2J\x1b[H";
         }
         prevWidth = curWidth;
 
@@ -490,7 +499,6 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
         // Kill-дiалог (потребує stdin)
         if (g_killRequested.exchange(false)) {
             g_inputPaused = true;
-            // Очищуємо stdin вiд залишкiв
             while (_kbhit()) _getch();
             {
                 std::lock_guard<std::mutex> lock(g_configMutex);
@@ -500,10 +508,9 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             continue;
         }
 
-        int interval;
+        // Рендер
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
-
             if (config.showSortMenu) {
                 ConsoleUI::RenderSortMenu(config);
             } else if (config.showHelp) {
@@ -511,10 +518,7 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             } else {
                 ConsoleUI::RenderMonitor(config, cpuMon);
             }
-            interval = config.refreshInterval;
         }
-        // Mutex звiльнений — InputThread може працювати пiд час sleep
-        Sleep(interval / 4); // Рендер ~250мс — достатньо плавно
     }
 }
 
@@ -524,6 +528,9 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
 int main() {
     ConsoleUI::InitConsole();
     SystemManager::EnableDebugPrivilege();
+
+    // Створюємо семафор (initial=1 щоб перший рендер вiдбувся одразу, max=32 щоб не переповнювався)
+    g_renderSemaphore = CreateSemaphoreW(NULL, 1, 32, NULL);
 
     CpuMonitor cpuMon;
     AppConfig config;
@@ -542,7 +549,6 @@ int main() {
             }
             CloseHandle(hThreadSnap);
         }
-        // iнiцiалiзацiя per-core (нулi на першому кадрi)
         SYSTEM_INFO si;
         GetSystemInfo(&si);
         g_cachedCoreUsages.resize(si.dwNumberOfProcessors, 0.0);
@@ -554,12 +560,17 @@ int main() {
     std::thread render(RenderThread, std::ref(config), std::ref(cpuMon));
 
     input.join();
+    g_running = false;  // Гарантуємо що iншi потоки теж зупиняться
+    SignalRender();      // Розблокувати Render якщо вiн чекає
     data.join();
     render.join();
 
+    // Прибираємо
+    CloseHandle(g_renderSemaphore);
+
     // Вiдновлення консолi при виходi
-    std::wcout << L"\x1b[?1049l"; // Повернення з альтернативного буфера
-    std::wcout << L"\x1b[?25h";   // Показати курсор
+    std::wcout << L"\x1b[?1049l";
+    std::wcout << L"\x1b[?25h";
 
     return 0;
 }
