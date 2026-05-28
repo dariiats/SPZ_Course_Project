@@ -348,8 +348,16 @@ std::vector<ProcessInfo> SystemManager::GetProcesses() {
 }
 
 DWORD SystemManager::KillProcess(DWORD pid) {
-    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (hProcess == NULL) return GetLastError();
+
+    // Перевiряємо чи процес ще живий (не завершився мiж вибором i kill)
+    DWORD exitCode = 0;
+    if (GetExitCodeProcess(hProcess, &exitCode) && exitCode != STILL_ACTIVE) {
+        CloseHandle(hProcess);
+        return ERROR_PROCESS_ABORTED; // Процес вже завершений
+    }
+
     DWORD result = 0;
     if (!TerminateProcess(hProcess, 0)) result = GetLastError();
     CloseHandle(hProcess);
