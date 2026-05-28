@@ -57,7 +57,7 @@ static void BufFlush() {
     DWORD remaining = static_cast<DWORD>(g_outBuf.size());
     while (remaining > 0) {
         DWORD chunk = (remaining > 32000) ? 32000 : remaining;
-        WriteConsoleW(hOut, ptr, chunk, &written, NULL);
+        if (!WriteConsoleW(hOut, ptr, chunk, &written, NULL) || written == 0) break;
         ptr += written;
         remaining -= written;
     }

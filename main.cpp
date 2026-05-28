@@ -464,13 +464,16 @@ void DataThread(AppConfig& config) {
         // Данi оновленi — трiгеримо рендер
         SignalRender();
 
-        // Спимо вiдповiдно до iнтервалу оновлення
+        // Спимо вiдповiдно до iнтервалу оновлення (з перевiркою g_running)
         int interval;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
             interval = config.refreshInterval;
         }
-        Sleep(interval);
+        // Розбиваємо sleep на шматки по 100мс щоб швидко реагувати на вихiд
+        for (int slept = 0; slept < interval && g_running; slept += 100) {
+            Sleep(100);
+        }
     }
 }
 
@@ -548,11 +551,12 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             ConsoleUI::RenderMonitor(configSnapshot, cpuMon);
         }
 
-        // Повертаємо змiни якi рендер мiг внести (visibleRows, selectedPid, clamped values)
+        // Повертаємо клемпнутi значення з рендеру
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.visibleRows = configSnapshot.visibleRows;
             config.selectedPid = configSnapshot.selectedPid;
+            // Завжди клемпимо — якщо Input встиг змiнити, наступний рендер виправить
             config.pageOffset = configSnapshot.pageOffset;
             config.selectedRow = configSnapshot.selectedRow;
         }
@@ -566,8 +570,8 @@ int main() {
     ConsoleUI::InitConsole();
     SystemManager::EnableDebugPrivilege();
 
-    // Створюємо семафор (initial=1 щоб перший рендер вiдбувся одразу, max=32 щоб не переповнювався)
-    g_renderSemaphore = CreateSemaphoreW(NULL, 1, 32, NULL);
+    // Створюємо семафор (initial=1 щоб перший рендер вiдбувся одразу, max достатньо великий)
+    g_renderSemaphore = CreateSemaphoreW(NULL, 1, 1024, NULL);
 
     CpuMonitor cpuMon;
     AppConfig config;
