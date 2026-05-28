@@ -60,11 +60,24 @@ enum class InputState {
 // ============================================================
 // ПОТiК 1: Input — блокуючий _getch() + state machine
 // ============================================================
-void InputThread(AppConfig& config) {
+void InputThread(AppConfig& config, CpuMonitor& cpuMon) {
     while (g_running) {
         // Пауза пiд час Kill-дiалогу
         if (g_inputPaused) {
             Sleep(50);
+            continue;
+        }
+
+        // Kill dialog — обробляємо тут бо ми тримаємо stdin
+        if (g_killRequested.exchange(false)) {
+            g_inputPaused = true; // Блокує Render вiд малювання поверх дiалогу
+            while (_kbhit()) _getch(); // Очищуємо stdin
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                ConsoleUI::HandleKillDialog(config, cpuMon);
+            }
+            g_inputPaused = false;
+            SignalRender(); // Перемалювати пiсля дiалогу
             continue;
         }
 
@@ -213,12 +226,52 @@ void InputThread(AppConfig& config) {
                 case EXT_F7: {
                     DWORD targetPid = 0;
                     { std::lock_guard<std::mutex> lock(g_configMutex); targetPid = config.selectedPid; }
-                    if (targetPid != 0) SystemManager::ChangeProcessPriority(targetPid, true);
+                    if (targetPid != 0) {
+                        DWORD err = SystemManager::ChangeProcessPriority(targetPid, true);
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        if (err == 0) {
+                            config.statusMessage = (config.lang == Language::Ukrainian)
+                                ? L"Pri+ PID " + std::to_wstring(targetPid)
+                                : L"Pri+ PID " + std::to_wstring(targetPid);
+                            config.statusIsError = false;
+                        } else if (err == ERROR_ACCESS_DENIED) {
+                            config.statusMessage = (config.lang == Language::Ukrainian)
+                                ? L"Вiдмовлено в доступi! PID " + std::to_wstring(targetPid)
+                                : L"Access denied! PID " + std::to_wstring(targetPid);
+                            config.statusIsError = true;
+                        } else {
+                            config.statusMessage = (config.lang == Language::Ukrainian)
+                                ? L"Помилка! PID " + std::to_wstring(targetPid)
+                                : L"Error! PID " + std::to_wstring(targetPid);
+                            config.statusIsError = true;
+                        }
+                        config.statusExpiry = GetTickCount64() + 3000;
+                    }
                 } break;
                 case EXT_F8: {
                     DWORD targetPid = 0;
                     { std::lock_guard<std::mutex> lock(g_configMutex); targetPid = config.selectedPid; }
-                    if (targetPid != 0) SystemManager::ChangeProcessPriority(targetPid, false);
+                    if (targetPid != 0) {
+                        DWORD err = SystemManager::ChangeProcessPriority(targetPid, false);
+                        std::lock_guard<std::mutex> lock(g_configMutex);
+                        if (err == 0) {
+                            config.statusMessage = (config.lang == Language::Ukrainian)
+                                ? L"Pri- PID " + std::to_wstring(targetPid)
+                                : L"Pri- PID " + std::to_wstring(targetPid);
+                            config.statusIsError = false;
+                        } else if (err == ERROR_ACCESS_DENIED) {
+                            config.statusMessage = (config.lang == Language::Ukrainian)
+                                ? L"Вiдмовлено в доступi! PID " + std::to_wstring(targetPid)
+                                : L"Access denied! PID " + std::to_wstring(targetPid);
+                            config.statusIsError = true;
+                        } else {
+                            config.statusMessage = (config.lang == Language::Ukrainian)
+                                ? L"Помилка! PID " + std::to_wstring(targetPid)
+                                : L"Error! PID " + std::to_wstring(targetPid);
+                            config.statusIsError = true;
+                        }
+                        config.statusExpiry = GetTickCount64() + 3000;
+                    }
                 } break;
                 case EXT_F9: {
                     g_killRequested = true;
@@ -391,12 +444,38 @@ void InputThread(AppConfig& config) {
             case ']': {
                 DWORD targetPid = 0;
                 { std::lock_guard<std::mutex> lock(g_configMutex); targetPid = config.selectedPid; }
-                if (targetPid != 0) SystemManager::ChangeProcessPriority(targetPid, true);
+                if (targetPid != 0) {
+                    DWORD err = SystemManager::ChangeProcessPriority(targetPid, true);
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    if (err == 0) {
+                        config.statusMessage = L"Pri+ PID " + std::to_wstring(targetPid);
+                        config.statusIsError = false;
+                    } else {
+                        config.statusMessage = (config.lang == Language::Ukrainian)
+                            ? L"Вiдмовлено в доступi! PID " + std::to_wstring(targetPid)
+                            : L"Access denied! PID " + std::to_wstring(targetPid);
+                        config.statusIsError = true;
+                    }
+                    config.statusExpiry = GetTickCount64() + 3000;
+                }
             } break;
             case '[': {
                 DWORD targetPid = 0;
                 { std::lock_guard<std::mutex> lock(g_configMutex); targetPid = config.selectedPid; }
-                if (targetPid != 0) SystemManager::ChangeProcessPriority(targetPid, false);
+                if (targetPid != 0) {
+                    DWORD err = SystemManager::ChangeProcessPriority(targetPid, false);
+                    std::lock_guard<std::mutex> lock(g_configMutex);
+                    if (err == 0) {
+                        config.statusMessage = L"Pri- PID " + std::to_wstring(targetPid);
+                        config.statusIsError = false;
+                    } else {
+                        config.statusMessage = (config.lang == Language::Ukrainian)
+                            ? L"Вiдмовлено в доступi! PID " + std::to_wstring(targetPid)
+                            : L"Access denied! PID " + std::to_wstring(targetPid);
+                        config.statusIsError = true;
+                    }
+                    config.statusExpiry = GetTickCount64() + 3000;
+                }
             } break;
             case 'k': case 'K': {
                 g_killRequested = true;
@@ -422,10 +501,27 @@ void InputThread(AppConfig& config) {
 // ============================================================
 void DataThread(AppConfig& config) {
     PerCoreCpuMonitor coreMon;
+    int consecutiveFailures = 0;
 
     while (g_running) {
         // Збiр даних (найважча операцiя)
         std::vector<ProcessInfo> freshProcesses = SystemManager::GetProcesses();
+
+        if (freshProcesses.empty()) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= 3) {
+                // 3 невдалих спроби пiдряд — повiдомляємо юзера
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                config.statusMessage = (config.lang == Language::Ukrainian)
+                    ? L"Помилка збору даних процесiв!"
+                    : L"Process data collection failed!";
+                config.statusIsError = true;
+                config.statusExpiry = GetTickCount64() + 5000;
+                consecutiveFailures = 0;
+            }
+        } else {
+            consecutiveFailures = 0;
+        }
 
         // Пiдрахунок потокiв
         int threadCount = 0;
@@ -523,19 +619,10 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             std::wcout << L"\x1b[2J\x1b[H";
         }
 
-        // Kill-дiалог (потребує stdin)
-        if (g_killRequested.exchange(false)) {
-            g_inputPaused = true;
-            while (_kbhit()) _getch();
-            {
-                std::lock_guard<std::mutex> lock(g_configMutex);
-                ConsoleUI::HandleKillDialog(config, cpuMon);
-            }
-            g_inputPaused = false;
-            continue;
-        }
-
         // Копiюємо config пiд mutex — малюємо вже без нього
+        // Не малюємо якщо Input thread показує Kill dialog
+        if (g_inputPaused) continue;
+
         AppConfig configSnapshot;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -556,9 +643,13 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.visibleRows = configSnapshot.visibleRows;
             config.selectedPid = configSnapshot.selectedPid;
-            // Завжди клемпимо — якщо Input встиг змiнити, наступний рендер виправить
             config.pageOffset = configSnapshot.pageOffset;
             config.selectedRow = configSnapshot.selectedRow;
+            // Повертаємо змiни статусу (expired toast, pin lost)
+            config.statusMessage = configSnapshot.statusMessage;
+            config.statusIsError = configSnapshot.statusIsError;
+            config.statusExpiry = configSnapshot.statusExpiry;
+            config.pinnedPid = configSnapshot.pinnedPid;
         }
     }
 }
@@ -568,13 +659,26 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
 // ============================================================
 int main() {
     ConsoleUI::InitConsole();
-    SystemManager::EnableDebugPrivilege();
 
-    // Створюємо семафор (initial=1 щоб перший рендер вiдбувся одразу, max достатньо великий)
+    // Створюємо семафор
     g_renderSemaphore = CreateSemaphoreW(NULL, 1, 1024, NULL);
+    if (g_renderSemaphore == NULL) {
+        std::wcout << L"\x1b[?1049l\x1b[?25h";
+        std::wcerr << L"Fatal: CreateSemaphore failed, error " << GetLastError() << std::endl;
+        return 1;
+    }
 
     CpuMonitor cpuMon;
     AppConfig config;
+
+    // Debug privilege — не критично якщо не вдалось
+    if (!SystemManager::EnableDebugPrivilege()) {
+        config.statusMessage = (config.lang == Language::Ukrainian)
+            ? L"Запущено без прав адмiнiстратора — деякi процеси недоступнi"
+            : L"Running without admin rights — some processes inaccessible";
+        config.statusIsError = true;
+        config.statusExpiry = GetTickCount64() + 5000;
+    }
 
     cpuMon.GetCpuUsage();
     Sleep(100);
@@ -596,20 +700,19 @@ int main() {
     }
 
     // Запуск 3 потокiв
-    std::thread input(InputThread, std::ref(config));
+    std::thread input(InputThread, std::ref(config), std::ref(cpuMon));
     std::thread data(DataThread, std::ref(config));
     std::thread render(RenderThread, std::ref(config), std::ref(cpuMon));
 
     input.join();
-    g_running = false;  // Гарантуємо що iншi потоки теж зупиняться
-    SignalRender();      // Розблокувати Render якщо вiн чекає
+    g_running = false;
+    SignalRender();
     data.join();
     render.join();
 
-    // Прибираємо
     CloseHandle(g_renderSemaphore);
 
-    // Вiдновлення консолi при виходi
+    // Вiдновлення консолi
     std::wcout << L"\x1b[?1049l";
     std::wcout << L"\x1b[?25h";
 

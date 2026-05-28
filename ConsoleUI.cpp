@@ -10,7 +10,6 @@
 #include <functional>
 #include <unordered_map>
 #include <conio.h>
-#include <sstream>
 
 // === Virtual Terminal Sequences ===
 #define VT_RESET        L"\x1b[0m"
@@ -274,6 +273,23 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         return;
     }
 
+    // === СТАТУСНИЙ РЯДОК (toast notification) ===
+    if (config.statusExpiry > 0) {
+        ULONGLONG now = GetTickCount64();
+        if (now < config.statusExpiry) {
+            B(config.statusIsError ? VT_FG_BRIGHT_RED : VT_FG_BRIGHT_GREEN);
+            B(L" "); B(config.statusMessage);
+            B(VT_RESET); B(VT_CLEAR_LINE); BNewline();
+        } else {
+            // Час вийшов — очищуємо
+            config.statusMessage.clear();
+            config.statusExpiry = 0;
+            B(VT_CLEAR_LINE); BNewline();
+        }
+    } else {
+        B(VT_CLEAR_LINE); BNewline();
+    }
+
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     int numCores = sysInfo.dwNumberOfProcessors;
@@ -291,7 +307,7 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
     int numCols = (numCores > 8) ? 4 : 2;
     int numRows = (numCores + numCols - 1) / numCols;
 
-    int visibleRows = termHeight - numRows - 7;
+    int visibleRows = termHeight - numRows - 8; // -8: status + cores + mem + swp + sep + tabs + header + footer
     if (visibleRows < 5) visibleRows = 5;
     config.visibleRows = visibleRows;
 
@@ -596,12 +612,23 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         }
         searchFound = found;
     } else if (config.pinnedPid != 0) {
+        bool pinFound = false;
         for (int i = 0; i < (int)processes.size(); ++i) {
             if (processes[i].pid == config.pinnedPid) {
                 config.pageOffset = (i / visibleRows) * visibleRows;
                 config.selectedRow = i - config.pageOffset;
+                pinFound = true;
                 break;
             }
+        }
+        if (!pinFound) {
+            // Закрiплений процес зник — скидаємо pin i показуємо повiдомлення
+            config.statusMessage = (config.lang == Language::Ukrainian)
+                ? L"Закрiплений процес завершився (PID " + std::to_wstring(config.pinnedPid) + L")"
+                : L"Pinned process terminated (PID " + std::to_wstring(config.pinnedPid) + L")";
+            config.statusIsError = true;
+            config.statusExpiry = GetTickCount64() + 3000;
+            config.pinnedPid = 0;
         }
     }
 
