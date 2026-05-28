@@ -630,7 +630,18 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
         }
 
         // Рендер без утримання mutex — Input вiльний працювати
-        if (configSnapshot.showSortMenu) {
+        // Перевiрка мiнiмального розмiру — показуємо попередження незалежно вiд стану
+        int termW = 0, termH = 0;
+        {
+            CONSOLE_SCREEN_BUFFER_INFO sbi;
+            GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &sbi);
+            termW = sbi.srWindow.Right - sbi.srWindow.Left + 1;
+            termH = sbi.srWindow.Bottom - sbi.srWindow.Top + 1;
+        }
+        if (termW < 80 || termH < 24) {
+            // Вiкно замале — показуємо повiдомлення замiсть будь-якого UI
+            ConsoleUI::RenderMonitor(configSnapshot, cpuMon);
+        } else if (configSnapshot.showSortMenu) {
             ConsoleUI::RenderSortMenu(configSnapshot);
         } else if (configSnapshot.showHelp) {
             ConsoleUI::RenderHelp(configSnapshot.lang);
