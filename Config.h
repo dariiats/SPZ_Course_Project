@@ -60,6 +60,11 @@ struct AppConfig {
     SortColumn sortColumn = SortColumn::Pid;
     IoSortColumn ioSortColumn = IoSortColumn::Pid;
     bool sortAscending = false;
+
+    // Статусне повiдомлення (toast) — зникає через statusExpiry
+    std::wstring statusMessage;
+    bool statusIsError = false;    // true = червоний, false = зелений
+    ULONGLONG statusExpiry = 0;    // GetTickCount64() коли повiдомлення зникає (0 = немає)
 };
 
 class LocalizationManager {
