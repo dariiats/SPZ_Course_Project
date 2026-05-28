@@ -60,11 +60,24 @@ enum class InputState {
 // ============================================================
 // ПОТiК 1: Input — блокуючий _getch() + state machine
 // ============================================================
-void InputThread(AppConfig& config) {
+void InputThread(AppConfig& config, CpuMonitor& cpuMon) {
     while (g_running) {
         // Пауза пiд час Kill-дiалогу
         if (g_inputPaused) {
             Sleep(50);
+            continue;
+        }
+
+        // Kill dialog — обробляємо тут бо ми тримаємо stdin
+        if (g_killRequested.exchange(false)) {
+            g_inputPaused = true; // Блокує Render вiд малювання поверх дiалогу
+            while (_kbhit()) _getch(); // Очищуємо stdin
+            {
+                std::lock_guard<std::mutex> lock(g_configMutex);
+                ConsoleUI::HandleKillDialog(config, cpuMon);
+            }
+            g_inputPaused = false;
+            SignalRender(); // Перемалювати пiсля дiалогу
             continue;
         }
 
@@ -523,19 +536,10 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             std::wcout << L"\x1b[2J\x1b[H";
         }
 
-        // Kill-дiалог (потребує stdin)
-        if (g_killRequested.exchange(false)) {
-            g_inputPaused = true;
-            while (_kbhit()) _getch();
-            {
-                std::lock_guard<std::mutex> lock(g_configMutex);
-                ConsoleUI::HandleKillDialog(config, cpuMon);
-            }
-            g_inputPaused = false;
-            continue;
-        }
-
         // Копiюємо config пiд mutex — малюємо вже без нього
+        // Не малюємо якщо Input thread показує Kill dialog
+        if (g_inputPaused) continue;
+
         AppConfig configSnapshot;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
@@ -596,7 +600,7 @@ int main() {
     }
 
     // Запуск 3 потокiв
-    std::thread input(InputThread, std::ref(config));
+    std::thread input(InputThread, std::ref(config), std::ref(cpuMon));
     std::thread data(DataThread, std::ref(config));
     std::thread render(RenderThread, std::ref(config), std::ref(cpuMon));
 
