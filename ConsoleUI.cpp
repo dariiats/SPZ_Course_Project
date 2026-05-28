@@ -605,7 +605,9 @@ void ConsoleUI::RenderMonitor(AppConfig& config, CpuMonitor& cpuMon) {
         }
     }
 
-    if (config.pageOffset >= (int)processes.size()) config.pageOffset = 0;
+    if (config.pageOffset >= (int)processes.size()) {
+        config.pageOffset = (std::max)(0, (int)processes.size() - visibleRows);
+    }
     if (config.selectedRow >= (std::min)(visibleRows, (int)processes.size() - config.pageOffset))
         config.selectedRow = (std::min)(visibleRows, (int)processes.size() - config.pageOffset) - 1;
     if (config.selectedRow < 0) config.selectedRow = 0;

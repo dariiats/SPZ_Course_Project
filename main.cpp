@@ -132,13 +132,18 @@ void InputThread(AppConfig& config) {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     if (!config.showHelp) {
                         config.selectedPid = 0;
-                        config.selectedRow++;
+                        if (config.selectedRow < config.visibleRows - 1) {
+                            config.selectedRow++;
+                        } else {
+                            config.pageOffset++;
+                        }
                     }
                 } break;
                 case EXT_RIGHT: {
                     std::lock_guard<std::mutex> lock(g_configMutex);
                     if (!config.showHelp) {
                         config.selectedPid = 0;
+                        // Обмежуємо: не бiльше нiж на одну сторiнку вперед вiд поточної
                         config.pageOffset += config.visibleRows;
                         config.selectedRow = 0;
                     }
@@ -149,8 +154,10 @@ void InputThread(AppConfig& config) {
                         config.selectedPid = 0;
                         if (config.pageOffset >= config.visibleRows) {
                             config.pageOffset -= config.visibleRows;
-                            config.selectedRow = 0;
+                        } else {
+                            config.pageOffset = 0;
                         }
+                        config.selectedRow = 0;
                     }
                 } break;
                 case EXT_F1: {
@@ -541,11 +548,13 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
             ConsoleUI::RenderMonitor(configSnapshot, cpuMon);
         }
 
-        // Повертаємо змiни якi рендер мiг внести (visibleRows, selectedPid)
+        // Повертаємо змiни якi рендер мiг внести (visibleRows, selectedPid, clamped values)
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
             config.visibleRows = configSnapshot.visibleRows;
             config.selectedPid = configSnapshot.selectedPid;
+            config.pageOffset = configSnapshot.pageOffset;
+            config.selectedRow = configSnapshot.selectedRow;
         }
     }
 }
