@@ -482,6 +482,23 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
         // Зливаємо зайвi сигнали (якщо накопичились) — рендеримо один раз
         while (WaitForSingleObject(g_renderSemaphore, 0) == WAIT_OBJECT_0) {}
 
+        // Debounce: якщо юзер друкує швидко (TextInput mode),
+        // чекаємо 15мс щоб зiбрати пачку символiв перед рендером.
+        // Це уникає перемальовування на КОЖЕН символ.
+        {
+            std::lock_guard<std::mutex> lock(g_configMutex);
+            if (config.showSearch || config.showFilter) {
+                // Вiдпускаємо mutex i чекаємо трохи
+            }
+        }
+        // Перевiряємо чи прийшли ще сигнали за 15мс
+        if (WaitForSingleObject(g_renderSemaphore, 15) == WAIT_OBJECT_0) {
+            // Прийшов ще сигнал — зливаємо всi що накопичились
+            while (WaitForSingleObject(g_renderSemaphore, 0) == WAIT_OBJECT_0) {}
+        }
+
+        if (!g_running) break;
+
         // Детекцiя змiни розмiру вiкна
         CONSOLE_SCREEN_BUFFER_INFO csbi;
         GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
@@ -509,7 +526,6 @@ void RenderThread(AppConfig& config, CpuMonitor& cpuMon) {
         }
 
         // Копiюємо config пiд mutex — малюємо вже без нього
-        // Це дозволяє Input потоку не блокуватись поки йде рендер
         AppConfig configSnapshot;
         {
             std::lock_guard<std::mutex> lock(g_configMutex);
